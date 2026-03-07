@@ -22,7 +22,8 @@ object FocusTargets {
         "com.chess.chess",
         "air.com.chess.chess",
         "org.example.testapp",
-        "org.example.testapp.dev"
+        "org.example.testapp.dev",
+        "com.example.testgame"
     )
 
     val blockedDomains: List<String> = listOf(

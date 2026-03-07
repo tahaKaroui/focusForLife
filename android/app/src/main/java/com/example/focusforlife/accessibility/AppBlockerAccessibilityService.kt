@@ -65,6 +65,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         val packageName = event.packageName.toString()
         if (shouldBlockUninstallDialog(packageName) ||
             shouldBlockFocusTogglePage(packageName) ||
+            shouldBlockDisplayOverOtherAppsPage(packageName) ||
             shouldBlockBatterySaverPage(packageName) ||
             shouldBlockMiuiPermissionsPage(packageName) ||
             shouldBlockForceStopDialog(packageName) ||
@@ -303,6 +304,17 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         val titleMatches = titleText.contains("FocusForLife", ignoreCase = true) ||
             titleText.contains("Focus For Life", ignoreCase = true)
         return titleMatches && !switchNodes.isNullOrEmpty()
+    }
+
+    private fun shouldBlockDisplayOverOtherAppsPage(packageName: String): Boolean {
+        if (FocusLockManager.isMaintenanceActive(this)) return false
+        if (packageName != "com.android.settings") return false
+        val root = rootInActiveWindow ?: return false
+        val titleNodes = root.findAccessibilityNodeInfosByViewId("com.android.settings:id/action_bar_title_expand")
+        val titleText = titleNodes?.firstOrNull()?.text?.toString().orEmpty()
+        if (!titleText.contains("Display over other apps", ignoreCase = true)) return false
+        val switchNodes = root.findAccessibilityNodeInfosByViewId("com.android.settings:id/switchWidget")
+        return !switchNodes.isNullOrEmpty()
     }
 
     private fun hasText(root: AccessibilityNodeInfo, text: String): Boolean {
