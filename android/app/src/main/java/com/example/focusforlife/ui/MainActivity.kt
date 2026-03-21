@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         FocusLogger.init(this)
         FocusLogger.i("MainActivity created")
+        com.example.focusforlife.core.FocusSync.startListening()
         refreshDashboard()
         setContent {
             FocusForLifeTheme {

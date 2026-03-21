@@ -45,6 +45,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         FocusLogger.init(this)
         FocusRules.ensureFreshDay(this)
+        com.example.focusforlife.core.FocusSync.startListening()
         FocusLogger.i("Accessibility service connected")
     }
 

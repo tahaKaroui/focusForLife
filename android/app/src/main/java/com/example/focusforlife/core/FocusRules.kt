@@ -78,6 +78,11 @@ object FocusRules {
                 .putStringSet(KEY_APP_SET, updatedApps)
                 .apply()
             updateHourlyLocked(prefs, millis)
+            // Push to Firebase for cross-device sync.
+            val dailySecs = TimeUnit.MILLISECONDS.toSeconds(total)
+            val hourlyUsed = prefs.getLong(KEY_HOURLY_USED, 0L)
+            val stamp = prefs.getLong(KEY_HOURLY_STAMP, 0L)
+            FocusSync.pushLocalState(dailySecs, TimeUnit.MILLISECONDS.toSeconds(hourlyUsed), stamp)
             if (millis >= 900) {
                 FocusLogger.v("Usage +${millis}ms source=$sourceId total=$total")
             }
@@ -109,7 +114,7 @@ object FocusRules {
     }
 
     fun remainingSeconds(context: Context): Long {
-        val used = getUsageSeconds(context)
+        val used = getUsageSeconds(context) + FocusSync.remoteDailySeconds
         return (DAILY_QUOTA_SECONDS - used).coerceAtLeast(0)
     }
 
@@ -120,12 +125,15 @@ object FocusRules {
             val now = System.currentTimeMillis()
             val currentStamp = hourStamp(now)
             val storedStamp = prefs.getLong(KEY_HOURLY_STAMP, 0L)
-            val used = if (storedStamp == currentStamp) {
+            val localUsed = if (storedStamp == currentStamp) {
                 prefs.getLong(KEY_HOURLY_USED, 0L)
             } else {
                 0L
             }
-            return TimeUnit.MILLISECONDS.toSeconds((HOURLY_LIMIT_MS - used).coerceAtLeast(0L))
+            // Add remote hourly usage from other devices (already in seconds, convert to ms).
+            val remoteMs = FocusSync.remoteHourlyUsedSeconds * 1000L
+            val totalUsed = localUsed + remoteMs
+            return TimeUnit.MILLISECONDS.toSeconds((HOURLY_LIMIT_MS - totalUsed).coerceAtLeast(0L))
         }
     }
 
@@ -150,7 +158,8 @@ object FocusRules {
         }
     }
 
-    fun isQuotaExceeded(context: Context): Boolean = getUsageSeconds(context) >= DAILY_QUOTA_SECONDS
+    fun isQuotaExceeded(context: Context): Boolean =
+        (getUsageSeconds(context) + FocusSync.remoteDailySeconds) >= DAILY_QUOTA_SECONDS
 
     fun isHardBlocked(now: LocalTime = LocalTime.now()): Boolean {
         return now.isAfter(HARD_BLOCK_START) || now.isBefore(HARD_BLOCK_END)
@@ -192,6 +201,9 @@ object FocusRules {
             .putLong(KEY_HOURLY_STAMP, currentStamp)
             .apply()
     }
+
+    /** Public so FocusSync can compare hour stamps across devices. */
+    fun currentHourStamp(): Long = hourStamp(System.currentTimeMillis())
 
     private fun hourStamp(now: Long): Long {
         val zone = ZoneId.systemDefault()
