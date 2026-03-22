@@ -144,8 +144,12 @@ fn write_blocklist_file(blocklist_path: &Path, domains: &[String]) -> Result<()>
     let mut contents = String::from("# Managed by FocusForLife daemon\n");
     for domain in domains {
         if let Some(cleaned) = normalize_domain(domain) {
-            contents.push_str(&format!("local-zone: \"{}\" always_nxdomain\n", cleaned));
-            contents.push_str(&format!("local-zone: \"www.{}\" always_nxdomain\n", cleaned));
+            // always_null returns 0.0.0.0 / :: instead of NXDOMAIN.
+            // Chromium/Brave treats NXDOMAIN as a resolver failure and retries
+            // via DNS-over-HTTPS, bypassing the sinkhole. A null-address answer
+            // is a valid response so DoH fallback is never triggered.
+            contents.push_str(&format!("local-zone: \"{}\" always_null\n", cleaned));
+            contents.push_str(&format!("local-zone: \"www.{}\" always_null\n", cleaned));
         }
     }
     atomic_write(blocklist_path, &contents)
