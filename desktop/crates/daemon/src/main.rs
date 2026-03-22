@@ -480,8 +480,8 @@ fn run_browser_history_tracking(
                 println!("enforcement: clearing blocklist (state=allowed)");
                 if let Err(e) = enforcement.apply_blocklist(&[]) {
                     eprintln!("failed to clear blocklist: {e}");
-                } else if let Err(e) = enforcement.reload_unbound() {
-                    eprintln!("failed to reload unbound: {e}");
+                } else if let Err(e) = enforcement.restart_unbound() {
+                    eprintln!("failed to restart unbound: {e}");
                 }
             }
             last_blocked = Some(is_blocked);
@@ -560,8 +560,8 @@ fn run_cdp_tracking(
                 println!("enforcement: clearing blocklist (state=allowed)");
                 if let Err(e) = enforcement.apply_blocklist(&[]) {
                     eprintln!("failed to clear blocklist: {e}");
-                } else if let Err(e) = enforcement.reload_unbound() {
-                    eprintln!("failed to reload unbound: {e}");
+                } else if let Err(e) = enforcement.restart_unbound() {
+                    eprintln!("failed to restart unbound: {e}");
                 }
             }
             last_blocked = Some(is_blocked);
@@ -687,8 +687,8 @@ fn run_activitywatch_tracking(
                 println!("enforcement: clearing blocklist (state=allowed)");
                 if let Err(e) = enforcement.apply_blocklist(&[]) {
                     eprintln!("failed to clear blocklist: {e}");
-                } else if let Err(e) = enforcement.reload_unbound() {
-                    eprintln!("failed to reload unbound: {e}");
+                } else if let Err(e) = enforcement.restart_unbound() {
+                    eprintln!("failed to restart unbound: {e}");
                 }
             }
             last_blocked = Some(is_blocked);

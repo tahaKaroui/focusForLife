@@ -21,15 +21,27 @@ impl Enforcement {
     }
 
     pub fn reload_unbound(&self) -> Result<()> {
-        // Send SIGHUP to the ffl-resolver service so it re-reads the blocklist
-        // include file.  Using systemctl avoids needing remote-control configured
-        // in unbound.conf, and correctly targets our custom Unbound instance
-        // rather than any system-level one.
+        // SIGHUP re-reads config but keeps the DNS cache intact.
+        // Use this when *applying* a blocklist — fast and sufficient.
         let status = std::process::Command::new("systemctl")
             .args(["kill", "--signal=HUP", "ffl-resolver"])
             .status()?;
         if !status.success() {
             anyhow::bail!("systemctl kill --signal=HUP ffl-resolver failed");
+        }
+        Ok(())
+    }
+
+    pub fn restart_unbound(&self) -> Result<()> {
+        // Full restart clears the DNS cache. Use this when *lifting* a block so
+        // always_null entries (0.0.0.0) don't linger in the cache after the
+        // blocklist is cleared — otherwise the browser can't reach sites for
+        // up to the TTL duration even though blocking is off.
+        let status = std::process::Command::new("systemctl")
+            .args(["restart", "ffl-resolver"])
+            .status()?;
+        if !status.success() {
+            anyhow::bail!("systemctl restart ffl-resolver failed");
         }
         Ok(())
     }
