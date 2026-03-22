@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase config (contains API key - keep local)
+app/google-services.json
+
+# Kotlin build cache
+.kotlin/
