@@ -13,9 +13,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
 
 /// Events older than this are considered stale (browser closed / tab switched away).
-/// AW watcher-web sends a heartbeat every ~5 s while a tab is active, so 20 s is
-/// generous enough to survive brief gaps without false negatives.
-const MAX_EVENT_AGE_SECS: f64 = 20.0;
+/// AW watcher-web has a default pulsetime of ~30 s (heartbeats within 30 s get merged
+/// into one event). 60 s gives a comfortable margin above that while still reliably
+/// rejecting events from a disabled extension (which would be hours old).
+const MAX_EVENT_AGE_SECS: f64 = 60.0;
 
 pub const DEFAULT_AW_BASE_URL: &str = "http://127.0.0.1:5600";
 pub const DEFAULT_WEB_BUCKET_PREFIX: &str = "aw-watcher-web";

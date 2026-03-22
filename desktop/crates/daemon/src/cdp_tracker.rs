@@ -73,6 +73,35 @@ impl CdpTracker {
         }
         domains
     }
+
+    /// Returns all tab domains if a browser window is currently the active window,
+    /// otherwise returns an empty list.
+    ///
+    /// Used as a secondary check: if the user has a browser focused and a blocked
+    /// site is open in any tab, count it — even if AW reported a different tab.
+    pub fn all_domains_if_browser_focused(&self) -> Vec<String> {
+        if !is_browser_window_active() {
+            return Vec::new();
+        }
+        self.poll_domains()
+    }
+}
+
+/// Returns true if a browser window is currently the active (focused) window.
+fn is_browser_window_active() -> bool {
+    let output = match std::process::Command::new("xdotool")
+        .args(["getactivewindow", "getwindowclassname"])
+        .env("DISPLAY", ":0")
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return false,
+    };
+    let class = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+    matches!(
+        class.as_str(),
+        "brave-browser" | "google-chrome" | "chromium-browser" | "chromium" | "firefox"
+    )
 }
 
 /// Ask xdotool for the active window's title.

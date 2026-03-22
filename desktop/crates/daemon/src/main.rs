@@ -620,8 +620,8 @@ fn run_activitywatch_tracking(
         let now = chrono::Local::now();
         let today = now.format("%Y-%m-%d").to_string();
 
-        // Ask AW which domain is *currently focused* (primary).
-        // Fall back to CDP + xdotool if AW extension is not active.
+        // Primary: AW reports the focused tab (requires extension active).
+        // CDP fallback (title match): kicks in when AW returns None.
         let (focused_domain, tracking_source) = if let Some(d) = aw.focused_domain() {
             (Some(d), "aw")
         } else if let Some(d) = cdp.focused_domain() {
@@ -633,6 +633,14 @@ fn run_activitywatch_tracking(
             .as_deref()
             .map(|d| domain_matches_blocked(d, &domain_set))
             .unwrap_or(false);
+
+        // Secondary CDP check: if the browser window is focused, check ALL open tabs.
+        // This catches cases where AW reports a non-blocked tab (e.g. extensions page)
+        // while YouTube is actually open and the browser is the active window.
+        let on_target_cdp = !on_target_aw && cdp
+            .all_domains_if_browser_focused()
+            .iter()
+            .any(|d| domain_matches_blocked(d, &domain_set));
 
         // Sync with Firebase if enabled and interval elapsed.
         if let Some(ref mut fb) = sync {
@@ -686,8 +694,9 @@ fn run_activitywatch_tracking(
             last_blocked = Some(is_blocked);
         }
 
-        // Only count time when the user is allowed AND the *focused* tab is banned.
-        let on_target = !is_blocked && on_target_aw;
+        // Count time when allowed AND (AW says focused tab is banned OR browser is
+        // focused with any banned tab open).
+        let on_target = !is_blocked && (on_target_aw || on_target_cdp);
         tracker.tick(storage, now, on_target, 1)?;
 
         if tick_count % 2 == 0 {
@@ -699,13 +708,14 @@ fn run_activitywatch_tracking(
         tick_count += 1;
         if tick_count % 10 == 0 {
             println!(
-                "tracking... daily={}s(+{}s remote) hourly={}s(+{}s remote) focused={}[{}] on_target={} blocked={}",
+                "tracking... daily={}s(+{}s remote) hourly={}s(+{}s remote) focused={}[{}] cdp_fallback={} on_target={} blocked={}",
                 usage.used_seconds,
                 remote.map_or(0, |r| r.daily_seconds),
                 tracker.hourly_used_seconds(),
                 remote.map_or(0, |r| r.hourly_used_seconds),
                 focused_domain.as_deref().unwrap_or("none"),
                 tracking_source,
+                on_target_cdp,
                 on_target,
                 is_blocked,
             );
