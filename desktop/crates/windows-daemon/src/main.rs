@@ -198,6 +198,22 @@ fn main() -> Result<()> {
             );
         }
 
+        // Write status file for UI.
+        let daily_quota_s = config.rules.daily_quota_minutes * 60;
+        let hourly_limit_s = config.rules.hourly_limit_minutes * 60;
+        let status_json = format!(
+            "{{\"state\":\"{}\",\"daily_remaining\":{},\"hourly_remaining\":{}}}",
+            match result.state {
+                FocusState::Allowed => "allowed",
+                FocusState::BlockedHardWindow => "blocked_hard_window",
+                FocusState::BlockedCooldown => "blocked_cooldown",
+                FocusState::BlockedQuota => "blocked_quota",
+            },
+            daily_quota_s.saturating_sub(combined_daily),
+            hourly_limit_s.saturating_sub(combined_hourly),
+        );
+        let _ = fs::write(r"C:\ProgramData\FocusForLife\status.json", &status_json);
+
         thread::sleep(Duration::from_secs(1));
     }
 }

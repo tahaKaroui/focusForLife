@@ -87,7 +87,7 @@ impl CdpTracker {
 fn active_window_title() -> Option<String> {
     unsafe {
         let hwnd: HWND = GetForegroundWindow();
-        if hwnd.0 == 0 {
+        if hwnd.0 == std::ptr::null_mut() {
             return None;
         }
         let mut buf = [0u16; 512];
@@ -109,7 +109,7 @@ fn active_window_title() -> Option<String> {
 fn is_browser_window_active() -> bool {
     unsafe {
         let hwnd: HWND = GetForegroundWindow();
-        if hwnd.0 == 0 {
+        if hwnd.0 == std::ptr::null_mut() {
             return false;
         }
         let mut buf = [0u16; 256];
