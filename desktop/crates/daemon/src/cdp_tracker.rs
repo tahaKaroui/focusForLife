@@ -88,20 +88,16 @@ impl CdpTracker {
 }
 
 /// Returns true if a browser window is currently the active (focused) window.
+///
+/// Uses the window title (via `active_window_title()`) and checks whether it
+/// ends with a known browser suffix — xdotool has no `getwindowclassname`
+/// command on this system.
 fn is_browser_window_active() -> bool {
-    let output = match std::process::Command::new("xdotool")
-        .args(["getactivewindow", "getwindowclassname"])
-        .env("DISPLAY", ":0")
-        .output()
-    {
-        Ok(o) => o,
-        Err(_) => return false,
+    let title = match active_window_title() {
+        Some(t) => t,
+        None => return false,
     };
-    let class = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
-    matches!(
-        class.as_str(),
-        "brave-browser" | "google-chrome" | "chromium-browser" | "chromium" | "firefox"
-    )
+    BROWSER_SUFFIXES.iter().any(|suffix| title.ends_with(suffix))
 }
 
 /// Ask xdotool for the active window's title.
