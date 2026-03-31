@@ -1,38 +1,35 @@
-use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::Write;
-use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-const NFT_TABLE: &str = "focusforlife_ipblock";
-const NFT_RULES_PATH: &str = "/run/focusforlife/ipblock.nft";
-
 pub struct Enforcement {
     blocklist_path: String,
+    cdp_ports: Vec<u16>,
 }
 
 impl Enforcement {
-    pub fn new(blocklist_path: String) -> Self {
-        Self { blocklist_path }
+    pub fn new(blocklist_path: String, cdp_ports: Vec<u16>) -> Self {
+        Self {
+            blocklist_path,
+            cdp_ports,
+        }
     }
 
-    /// Full block: resolve IPs first, then poison DNS, then firewall the IPs.
-    /// The order matters — DNS must be poisoned *after* we resolve real IPs.
+    /// Full block: poison DNS then close blocked browser tabs via CDP.
     pub fn block_all(&self, domains: &[String]) -> Result<()> {
-        let ips = resolve_domain_ips(domains);
         self.apply_blocklist(domains)?;
         self.reload_unbound()?;
-        if !ips.is_empty() {
-            self.apply_ip_block(&ips)?;
+        let closed = close_blocked_tabs(&self.cdp_ports, domains);
+        if closed > 0 {
+            println!("enforcement: closed {closed} blocked tab(s) via CDP");
         }
         Ok(())
     }
 
-    /// Full unblock: remove firewall rules, clear DNS blocklist, flush cache.
+    /// Full unblock: clear DNS blocklist, flush cache.
     pub fn unblock_all(&self) -> Result<()> {
-        self.clear_ip_block().ok(); // best-effort
         self.apply_blocklist(&[])?;
         self.restart_unbound()?;
         Ok(())
@@ -61,64 +58,6 @@ impl Enforcement {
         if !status.success() {
             anyhow::bail!("systemctl restart ffl-resolver failed");
         }
-        Ok(())
-    }
-
-    fn apply_ip_block(&self, ips: &HashSet<IpAddr>) -> Result<()> {
-        let v4: Vec<String> = ips
-            .iter()
-            .filter_map(|ip| match ip {
-                IpAddr::V4(a) => Some(a.to_string()),
-                _ => None,
-            })
-            .collect();
-        if v4.is_empty() {
-            return Ok(());
-        }
-        let elements = v4.join(", ");
-        let rules = format!(
-            "table inet {NFT_TABLE} {{\n\
-               set blocked_ips {{\n\
-                 type ipv4_addr\n\
-                 elements = {{ {elements} }}\n\
-               }}\n\
-               chain output {{\n\
-                 type filter hook output priority filter + 10; policy accept;\n\
-                 ip daddr @blocked_ips reject\n\
-               }}\n\
-             }}\n"
-        );
-        // Delete old table first (ignore error if it doesn't exist).
-        std::process::Command::new("nft")
-            .args(["delete", "table", "inet", NFT_TABLE])
-            .stderr(std::process::Stdio::null())
-            .status()
-            .ok();
-        let rules_path = Path::new(NFT_RULES_PATH);
-        atomic_write(rules_path, &rules)?;
-        let status = std::process::Command::new("nft")
-            .args(["-f", NFT_RULES_PATH])
-            .status()?;
-        if !status.success() {
-            anyhow::bail!("nft -f {} failed", NFT_RULES_PATH);
-        }
-        println!(
-            "enforcement: IP block applied ({} addresses)",
-            v4.len()
-        );
-        Ok(())
-    }
-
-    fn clear_ip_block(&self) -> Result<()> {
-        let output = std::process::Command::new("nft")
-            .args(["delete", "table", "inet", NFT_TABLE])
-            .stderr(std::process::Stdio::null())
-            .status()?;
-        if !output.success() {
-            // Table didn't exist — not an error on first run / after reboot.
-            return Ok(());
-        }
-        println!("enforcement: IP block cleared");
         Ok(())
     }
 
@@ -195,6 +134,7 @@ table inet focusforlife_dns {{\n\
 
         let runtime = Self {
             blocklist_path: blocklist_path.display().to_string(),
+            cdp_ports: vec![],
         };
         runtime.write_unbound_config(&unbound_config_path, include_path, resolver_port)?;
         runtime.write_nft_rules(&nft_rules_path, resolver_port)?;
@@ -243,23 +183,65 @@ fn write_blocklist_file(blocklist_path: &Path, domains: &[String]) -> Result<()>
     atomic_write(blocklist_path, &contents)
 }
 
-/// Resolve blocked domains to their real IP addresses before DNS is poisoned.
-fn resolve_domain_ips(domains: &[String]) -> HashSet<IpAddr> {
-    let mut ips = HashSet::new();
-    for domain in domains {
-        for host in &[domain.clone(), format!("www.{domain}")] {
-            if let Ok(addrs) = format!("{host}:443").to_socket_addrs() {
-                for addr in addrs {
-                    let ip = addr.ip();
-                    // Skip loopback and null addresses (already blocked or local).
-                    if !ip.is_loopback() && ip != IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED) {
-                        ips.insert(ip);
-                    }
+/// Close browser tabs whose URL matches a blocked domain via CDP.
+/// This kills active streams (YouTube video, WebSocket games) immediately
+/// without the collateral damage of IP-based firewall blocking.
+fn close_blocked_tabs(ports: &[u16], domains: &[String]) -> usize {
+    let mut closed = 0;
+    for &port in ports {
+        let url = format!("http://localhost:{port}/json");
+        let body = match ureq::get(&url)
+            .timeout(std::time::Duration::from_millis(300))
+            .call()
+        {
+            Ok(resp) => match resp.into_string() {
+                Ok(b) => b,
+                Err(_) => continue,
+            },
+            Err(_) => continue,
+        };
+        let targets: Vec<serde_json::Value> = match serde_json::from_str(&body) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        for target in &targets {
+            if target.get("type").and_then(|t| t.as_str()) != Some("page") {
+                continue;
+            }
+            let tab_url = match target.get("url").and_then(|u| u.as_str()) {
+                Some(u) => u,
+                None => continue,
+            };
+            let tab_domain = match url::Url::parse(tab_url)
+                .ok()
+                .and_then(|u| u.host_str().map(|h| h.to_lowercase()))
+            {
+                Some(d) => d,
+                None => continue,
+            };
+            let is_blocked = domains.iter().any(|blocked| {
+                tab_domain == *blocked
+                    || tab_domain == format!("www.{blocked}")
+                    || tab_domain.ends_with(&format!(".{blocked}"))
+            });
+            if !is_blocked {
+                continue;
+            }
+            // Close via CDP: GET /json/close/{targetId}
+            if let Some(id) = target.get("id").and_then(|i| i.as_str()) {
+                let close_url = format!("http://localhost:{port}/json/close/{id}");
+                if ureq::get(&close_url)
+                    .timeout(std::time::Duration::from_millis(300))
+                    .call()
+                    .is_ok()
+                {
+                    println!("enforcement: closed tab {} ({})", tab_domain, tab_url);
+                    closed += 1;
                 }
             }
         }
     }
-    ips
+    closed
 }
 
 fn atomic_write(path: &Path, contents: &str) -> Result<()> {

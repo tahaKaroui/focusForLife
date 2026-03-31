@@ -42,7 +42,15 @@ fn main() -> Result<()> {
     let config = load_config(&config_path)?;
     validate_config(&config)?;
 
-    let enforcement = Enforcement::new(args.blocklist_conf_path.display().to_string());
+    let cdp_ports_for_enforcement = if args.cdp_ports.is_empty() {
+        DEFAULT_CDP_PORTS.to_vec()
+    } else {
+        args.cdp_ports.clone()
+    };
+    let enforcement = Enforcement::new(
+        args.blocklist_conf_path.display().to_string(),
+        cdp_ports_for_enforcement,
+    );
     if let Some(path) = args.blocklist_path {
         let domains = load_domain_list(&path)?;
         enforcement.apply_blocklist(&domains)?;
@@ -61,6 +69,7 @@ fn main() -> Result<()> {
                 .join("focusforlife-blocklist.conf")
                 .display()
                 .to_string(),
+            vec![],
         );
         let assets = runtime_enforcement.write_dns_test_assets(
             &output_dir,
