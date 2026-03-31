@@ -467,21 +467,17 @@ fn run_browser_history_tracking(
         )?;
         let is_blocked = !matches!(result.state, ffl_shared::ipc::FocusState::Allowed);
 
-        // Apply or clear the DNS blocklist whenever the blocking state changes.
+        // Apply or clear blocking whenever the state changes.
         if last_blocked != Some(is_blocked) {
             if is_blocked {
-                println!("enforcement: applying blocklist ({} domains, state={:?})", domains.len(), result.state);
-                if let Err(e) = enforcement.apply_blocklist(&domains) {
-                    eprintln!("failed to apply blocklist: {e}");
-                } else if let Err(e) = enforcement.reload_unbound() {
-                    eprintln!("failed to reload unbound: {e}");
+                println!("enforcement: blocking ({} domains, state={:?})", domains.len(), result.state);
+                if let Err(e) = enforcement.block_all(&domains) {
+                    eprintln!("failed to apply block: {e}");
                 }
             } else {
-                println!("enforcement: clearing blocklist (state=allowed)");
-                if let Err(e) = enforcement.apply_blocklist(&[]) {
-                    eprintln!("failed to clear blocklist: {e}");
-                } else if let Err(e) = enforcement.restart_unbound() {
-                    eprintln!("failed to restart unbound: {e}");
+                println!("enforcement: unblocking (state=allowed)");
+                if let Err(e) = enforcement.unblock_all() {
+                    eprintln!("failed to unblock: {e}");
                 }
             }
             last_blocked = Some(is_blocked);
@@ -550,18 +546,14 @@ fn run_cdp_tracking(
 
         if last_blocked != Some(is_blocked) {
             if is_blocked {
-                println!("enforcement: applying blocklist ({} domains, state={:?})", domains.len(), result.state);
-                if let Err(e) = enforcement.apply_blocklist(&domains) {
-                    eprintln!("failed to apply blocklist: {e}");
-                } else if let Err(e) = enforcement.reload_unbound() {
-                    eprintln!("failed to reload unbound: {e}");
+                println!("enforcement: blocking ({} domains, state={:?})", domains.len(), result.state);
+                if let Err(e) = enforcement.block_all(&domains) {
+                    eprintln!("failed to apply block: {e}");
                 }
             } else {
-                println!("enforcement: clearing blocklist (state=allowed)");
-                if let Err(e) = enforcement.apply_blocklist(&[]) {
-                    eprintln!("failed to clear blocklist: {e}");
-                } else if let Err(e) = enforcement.restart_unbound() {
-                    eprintln!("failed to restart unbound: {e}");
+                println!("enforcement: unblocking (state=allowed)");
+                if let Err(e) = enforcement.unblock_all() {
+                    eprintln!("failed to unblock: {e}");
                 }
             }
             last_blocked = Some(is_blocked);
@@ -677,18 +669,14 @@ fn run_activitywatch_tracking(
 
         if last_blocked != Some(is_blocked) {
             if is_blocked {
-                println!("enforcement: applying blocklist ({} domains, state={:?})", domains.len(), result.state);
-                if let Err(e) = enforcement.apply_blocklist(&domains) {
-                    eprintln!("failed to apply blocklist: {e}");
-                } else if let Err(e) = enforcement.reload_unbound() {
-                    eprintln!("failed to reload unbound: {e}");
+                println!("enforcement: blocking ({} domains, state={:?})", domains.len(), result.state);
+                if let Err(e) = enforcement.block_all(&domains) {
+                    eprintln!("failed to apply block: {e}");
                 }
             } else {
-                println!("enforcement: clearing blocklist (state=allowed)");
-                if let Err(e) = enforcement.apply_blocklist(&[]) {
-                    eprintln!("failed to clear blocklist: {e}");
-                } else if let Err(e) = enforcement.restart_unbound() {
-                    eprintln!("failed to restart unbound: {e}");
+                println!("enforcement: unblocking (state=allowed)");
+                if let Err(e) = enforcement.unblock_all() {
+                    eprintln!("failed to unblock: {e}");
                 }
             }
             last_blocked = Some(is_blocked);
