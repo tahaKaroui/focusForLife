@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use chrono::{DateTime, Local, NaiveTime};
+use chrono::{DateTime, Local, NaiveTime, Timelike};
 use ffl_shared::config::Config;
 use ffl_shared::ipc::FocusState;
 
@@ -25,7 +25,15 @@ pub struct RuleResult {
 pub fn evaluate(config: &Config, input: RuleInputs) -> Result<RuleResult> {
     let daily_quota_seconds = config.rules.daily_quota_minutes * 60;
     let daily_used_seconds = input.usage.used_seconds;
-    let hourly_limit_seconds = config.rules.hourly_limit_minutes * 60;
+    let current_hour = input.now.hour();
+    let hourly_limit_minutes = config
+        .rules
+        .hourly_overrides
+        .iter()
+        .find(|o| o.hours.contains(&current_hour))
+        .map(|o| o.limit_minutes)
+        .unwrap_or(config.rules.hourly_limit_minutes);
+    let hourly_limit_seconds = hourly_limit_minutes * 60;
 
     // 1. Hard block window (sleep time).
     let hard_block = in_window(&config.windows.hard_block, input.now)?;

@@ -38,6 +38,17 @@ pub struct Rules {
     pub hourly_limit_minutes: u32,
     /// Grace window after a hit to consider user "on target" (seconds).
     pub activity_grace_seconds: u32,
+    /// Per-hour overrides (e.g. reduced limit for morning hours).
+    #[serde(default)]
+    pub hourly_overrides: Vec<HourlyOverride>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HourlyOverride {
+    /// Clock hours (0–23) this override applies to.
+    pub hours: Vec<u32>,
+    /// Limit in minutes for these hours.
+    pub limit_minutes: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +103,7 @@ impl Default for Config {
                 daily_quota_minutes: 60,
                 hourly_limit_minutes: 10,
                 activity_grace_seconds: 30,
+                hourly_overrides: Vec::new(),
             },
             windows: Windows {
                 hard_block: TimeWindow {

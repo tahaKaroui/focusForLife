@@ -767,10 +767,20 @@ fn broadcast_status(
         daily_used_seconds: result.daily_used_seconds,
         daily_quota_seconds: result.daily_quota_seconds,
         hourly_used_seconds: tracker.hourly_used_seconds(),
-        hourly_limit_seconds: config.rules.hourly_limit_minutes * 60,
+        hourly_limit_seconds: resolved_hourly_limit_seconds(config, now),
         cooldown_remaining_seconds: result.cooldown_remaining_seconds,
     };
     ipc.broadcast(&DaemonEvent::Status(snap)).ok();
+}
+
+fn resolved_hourly_limit_seconds(config: &Config, now: chrono::DateTime<chrono::Local>) -> u32 {
+    use chrono::Timelike;
+    let hour = now.hour();
+    let minutes = config.rules.hourly_overrides.iter()
+        .find(|o| o.hours.contains(&hour))
+        .map(|o| o.limit_minutes)
+        .unwrap_or(config.rules.hourly_limit_minutes);
+    minutes * 60
 }
 
 fn broadcast_status_combined(
@@ -781,7 +791,7 @@ fn broadcast_status_combined(
     now: chrono::DateTime<chrono::Local>,
     ipc: &IpcServer,
 ) {
-    let hourly_limit_seconds = config.rules.hourly_limit_minutes * 60;
+    let hourly_limit_seconds = resolved_hourly_limit_seconds(config, now);
     let daily_quota_seconds = config.rules.daily_quota_minutes * 60;
     let state = if combined_daily >= daily_quota_seconds {
         ffl_shared::ipc::FocusState::BlockedQuota
