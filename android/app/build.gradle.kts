@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.focusforlife"
+    namespace = "dev.focusforlife.android"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.focusforlife"
+        applicationId = "dev.focusforlife.android"
         minSdk = 35
         targetSdk = 36
         versionCode = 1
