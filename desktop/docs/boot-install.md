@@ -19,7 +19,7 @@ What it does:
 Daemon behavior after install:
 
 - starts automatically on Ubuntu boot
-- polls browser history from `/home/user`
+- polls browser history from the current user's `$HOME`
 - tracks Brave, Chrome, Chromium, and Firefox history databases when present
 - uses the existing blocked-domain list for activity detection
 

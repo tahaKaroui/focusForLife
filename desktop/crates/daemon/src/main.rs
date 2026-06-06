@@ -114,7 +114,12 @@ fn main() -> Result<()> {
     if args.browser_history_poll {
         let profile_root = args
             .browser_profile_root
-            .unwrap_or_else(|| PathBuf::from("/home/user"));
+            .unwrap_or_else(|| {
+                // Default to the current user's home; override with --browser-profile-root.
+                std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from("."))
+            });
         run_browser_history_tracking(&config, &storage, &profile_root, &enforcement)?;
     }
 
