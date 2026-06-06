@@ -28,6 +28,13 @@ impl Enforcement {
         Ok(())
     }
 
+    /// Close blocked tabs only, without touching DNS. Safe (and intended) to call
+    /// every tick while blocked: catches tabs the user reopens from the browser's
+    /// internal DNS/connection cache after the one-shot block_all already ran.
+    pub fn close_tabs(&self, domains: &[String]) -> usize {
+        close_blocked_tabs(&self.cdp_ports, domains)
+    }
+
     /// Full unblock: clear DNS blocklist, flush cache.
     pub fn unblock_all(&self) -> Result<()> {
         self.apply_blocklist(&[])?;

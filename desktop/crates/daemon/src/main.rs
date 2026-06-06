@@ -492,6 +492,14 @@ fn run_browser_history_tracking(
             last_blocked = Some(is_blocked);
         }
 
+        // While blocked, keep closing tabs the user reopens. The one-shot block_all
+        // above poisons DNS, but Chromium/Brave caches the real IP (and reuses QUIC
+        // connections), so a reopened tab loads from cache. Re-closing every tick
+        // makes the block stick instead of "reopen and it works".
+        if is_blocked {
+            enforcement.close_tabs(&domains);
+        }
+
         // Only count time on blocked sites when access is currently allowed.
         let on_target = !is_blocked && active_until.map(|t| t > now).unwrap_or(false);
         tracker.tick(storage, now, on_target, 1)?;
@@ -566,6 +574,14 @@ fn run_cdp_tracking(
                 }
             }
             last_blocked = Some(is_blocked);
+        }
+
+        // While blocked, keep closing tabs the user reopens. The one-shot block_all
+        // above poisons DNS, but Chromium/Brave caches the real IP (and reuses QUIC
+        // connections), so a reopened tab loads from cache. Re-closing every tick
+        // makes the block stick instead of "reopen and it works".
+        if is_blocked {
+            enforcement.close_tabs(&domains);
         }
 
         // Only count time when access is allowed and a blocked site is open right now.
@@ -689,6 +705,14 @@ fn run_activitywatch_tracking(
                 }
             }
             last_blocked = Some(is_blocked);
+        }
+
+        // While blocked, keep closing tabs the user reopens. The one-shot block_all
+        // above poisons DNS, but Chromium/Brave caches the real IP (and reuses QUIC
+        // connections), so a reopened tab loads from cache. Re-closing every tick
+        // makes the block stick instead of "reopen and it works".
+        if is_blocked {
+            enforcement.close_tabs(&domains);
         }
 
         // Count time when allowed AND (AW says focused tab is banned OR browser is
