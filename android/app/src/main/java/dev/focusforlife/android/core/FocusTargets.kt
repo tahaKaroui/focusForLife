@@ -4,9 +4,11 @@ package dev.focusforlife.android.core
  * Central place for blocked packages + domains so UI and services stay in sync.
  *
  * These are sensible defaults aimed at common time-sinks. Customize them to your
- * own distractions — add or remove entries below and rebuild. The trailing
- * DNS-over-HTTPS resolvers are intentionally blocked to stop apps bypassing the
- * VPN DNS sinkhole; remove them only if you know what you're doing.
+ * own distractions — add or remove entries below and rebuild. See the
+ * "Customize what gets blocked" section of the README for how to turn an app's
+ * name into a package name. The trailing DNS-over-HTTPS resolvers are
+ * intentionally blocked to stop apps bypassing the VPN DNS sinkhole; remove them
+ * only if you know what you're doing.
  */
 object FocusTargets {
 

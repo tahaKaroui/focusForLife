@@ -1,3 +1,5 @@
+# Example/default config — tracked in git. Do NOT put real Firebase credentials
+# here; copy this file to config/<name>.local.toml (gitignored) and edit that.
 [rules]
 daily_quota_minutes = 60
 hourly_limit_minutes = 10
