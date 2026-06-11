@@ -7,8 +7,8 @@ engine (daily quota, hourly limits, hard-block windows, free-time windows).
 This is a **build-from-source** project. Real configuration (including any Firebase
 credentials) lives in gitignored local files, never in the repo.
 
-> Part of the FocusForLife project. The Android companion lives in a separate
-> repository.
+> Part of the [FocusForLife](../README.md) monorepo. The Android companion lives
+> in [`../android`](../android).
 
 ---
 

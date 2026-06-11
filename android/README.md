@@ -10,8 +10,8 @@ APK yourself and install it. That is intentional: the blocklist is compiled into
 APK, so unblocking something requires editing one file and rebuilding, not just
 toggling a setting in a weak moment. The friction is the point.
 
-> Part of the FocusForLife project. The desktop/Linux companion lives in a separate
-> repository.
+> Part of the [FocusForLife](../README.md) monorepo. The desktop/Linux companion
+> lives in [`../desktop`](../desktop).
 
 ---
 
