@@ -38,20 +38,39 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     private val usageHandler = Handler(Looper.getMainLooper())
     private val usageRunnable = object : Runnable {
         override fun run() {
-            tickActiveUsage()
+            // Never let an exception escape to the framework: a single crash here
+            // marks the service "Not working" until it is manually toggled.
+            try {
+                tickActiveUsage()
+            } catch (t: Throwable) {
+                FocusLogger.e("tickActiveUsage crashed (suppressed)", t)
+            }
             usageHandler.postDelayed(this, USAGE_TICK_MS)
         }
     }
 
     override fun onServiceConnected() {
-        FocusLogger.init(this)
-        FocusRules.ensureFreshDay(this)
-        dev.focusforlife.android.core.FocusSync.startListening()
-        dev.focusforlife.android.services.FocusForegroundNotifications.cancelAccessibilityAlert(this)
-        FocusLogger.i("Accessibility service connected")
+        connected = true
+        try {
+            FocusLogger.init(this)
+            FocusRules.ensureFreshDay(this)
+            dev.focusforlife.android.core.FocusSync.startListening()
+            dev.focusforlife.android.services.FocusForegroundNotifications.cancelAccessibilityAlert(this)
+            FocusLogger.i("Accessibility service connected")
+        } catch (t: Throwable) {
+            FocusLogger.e("onServiceConnected crashed (suppressed)", t)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        try {
+            handleAccessibilityEvent(event)
+        } catch (t: Throwable) {
+            FocusLogger.e("onAccessibilityEvent crashed (suppressed)", t)
+        }
+    }
+
+    private fun handleAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.packageName == null) return
         val eventType = event.eventType
         if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -306,10 +325,21 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         finalizeBrowserUsage()
     }
 
+    override fun onUnbind(intent: Intent?): Boolean {
+        connected = false
+        FocusLogger.w("Accessibility service unbound")
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
+        connected = false
         FocusLogger.w("Accessibility service destroyed")
-        finalizeActiveUsage()
-        finalizeBrowserUsage()
+        try {
+            finalizeActiveUsage()
+            finalizeBrowserUsage()
+        } catch (t: Throwable) {
+            FocusLogger.e("onDestroy cleanup crashed (suppressed)", t)
+        }
         super.onDestroy()
     }
 
@@ -555,6 +585,15 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        /**
+         * True only while the framework has this service bound. Survives nothing:
+         * a process kill (MIUI "clear all") resets it to false while the secure
+         * setting still lists the service — that mismatch is the zombie state the
+         * overlay watchdog repairs via AccessibilityUtils.forceRebind().
+         */
+        @Volatile private var connected = false
+        fun isConnected(): Boolean = connected
+
         private const val USAGE_TICK_MS = 1_000L
         private const val PENDING_STOP_GRACE_MS = 1_800L
         private const val URL_CHECK_INTERVAL_MS = 500L

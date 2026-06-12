@@ -31,6 +31,8 @@ class FocusOverlayService : Service() {
     private var started = false
     private val handler = Handler(Looper.getMainLooper())
     private var accessibilityCheckTick = 0
+    private var unhealthyChecks = 0
+    private var lastBlockedState: Boolean? = null
     private val updateRunnable = object : Runnable {
         override fun run() {
             updateOverlay()
@@ -127,16 +129,22 @@ class FocusOverlayService : Service() {
 
     private fun checkAccessibilityPeriodically() {
         accessibilityCheckTick++
-        if (accessibilityCheckTick < 60) return
+        if (accessibilityCheckTick < ACCESSIBILITY_CHECK_INTERVAL_TICKS) return
         accessibilityCheckTick = 0
-        if (!AccessibilityUtils.isServiceEnabled(this)) {
-            val fixed = AccessibilityUtils.ensureServiceEnabled(this)
-            if (!fixed) {
-                FocusLogger.w("Accessibility service not enabled and cannot auto-fix — alerting user")
-                FocusForegroundNotifications.postAccessibilityDisabledAlert(this)
-            }
-        } else {
+        if (AccessibilityUtils.isServiceHealthy(this)) {
+            unhealthyChecks = 0
             FocusForegroundNotifications.cancelAccessibilityAlert(this)
+            return
+        }
+        // Require two consecutive bad checks so we don't toggle the secure setting
+        // while the framework is still rebinding after a process restart.
+        unhealthyChecks++
+        if (unhealthyChecks < 2) return
+        FocusLogger.w("Accessibility service unhealthy (check #$unhealthyChecks) — attempting auto-fix")
+        val fixed = AccessibilityUtils.ensureServiceEnabled(this)
+        if (!fixed) {
+            FocusLogger.w("Accessibility service cannot be auto-fixed — alerting user")
+            FocusForegroundNotifications.postAccessibilityDisabledAlert(this)
         }
     }
 
@@ -145,14 +153,36 @@ class FocusOverlayService : Service() {
         FocusRules.ensureFreshDay(this)
         val hourlyLeft = FocusRules.sessionRemainingSeconds(this)
         val dailyLeft = FocusRules.remainingSeconds(this)
+        val hourlyLimit = FocusRules.currentHourlyLimitSeconds().coerceAtLeast(1)
+        val dailyQuota = FocusRules.dailyQuotaSeconds().coerceAtLeast(1)
+        val blocked = FocusRules.shouldDenyAccess(this)
+
         val bubbleLabel = view.findViewById<TextView>(R.id.overlayBubbleLabel)
         val bubbleTime = view.findViewById<TextView>(R.id.overlayBubbleTime)
-        bubbleLabel.text = format(dailyLeft)
         bubbleTime.text = format(hourlyLeft)
+        bubbleLabel.text = format(dailyLeft)
 
-        view.findViewById<TextView>(R.id.overlayTitle).text = "TIME LEFT"
-        view.findViewById<TextView>(R.id.overlayBody).text =
-            "Hourly: ${format(hourlyLeft)}\nDaily: ${format(dailyLeft)}"
+        if (blocked != lastBlockedState) {
+            lastBlockedState = blocked
+            val bg = if (blocked) R.drawable.overlay_bubble_bg_blocked else R.drawable.overlay_bubble_bg
+            view.findViewById<android.view.View>(R.id.overlayBubble).setBackgroundResource(bg)
+            view.findViewById<android.view.View>(R.id.overlayMinimized).setBackgroundResource(bg)
+        }
+
+        view.findViewById<TextView>(R.id.overlayTitle).text =
+            if (blocked) "BLOCKED" else "TIME LEFT"
+        view.findViewById<TextView>(R.id.overlayHourlyValue).text =
+            "This hour · ${format(hourlyLeft)}"
+        view.findViewById<TextView>(R.id.overlayDailyValue).text =
+            "Today · ${format(dailyLeft)}"
+        view.findViewById<android.widget.ProgressBar>(R.id.overlayHourlyBar).apply {
+            max = hourlyLimit.toInt()
+            progress = hourlyLeft.coerceIn(0, hourlyLimit).toInt()
+        }
+        view.findViewById<android.widget.ProgressBar>(R.id.overlayDailyBar).apply {
+            max = dailyQuota.toInt()
+            progress = dailyLeft.coerceIn(0, dailyQuota).toInt()
+        }
     }
 
     private fun format(seconds: Long): String {
@@ -241,6 +271,7 @@ class FocusOverlayService : Service() {
 
     companion object {
         const val ACTION_STOP = "dev.focusforlife.android.action.STOP_OVERLAY"
+        private const val ACCESSIBILITY_CHECK_INTERVAL_TICKS = 15
         @Volatile private var running: Boolean = false
         fun isRunning(): Boolean = running
     }
