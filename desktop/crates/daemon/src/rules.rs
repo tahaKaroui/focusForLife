@@ -56,7 +56,7 @@ pub fn evaluate(config: &Config, input: RuleInputs) -> Result<RuleResult> {
         });
     }
 
-    // 3. Hourly limit hit — cooldown until next hour boundary.
+    // 3. Hourly limit hit; cooldown until next hour boundary.
     if input.hourly_used_seconds >= hourly_limit_seconds {
         let remaining = seconds_until_next_hour(input.now);
         return Ok(RuleResult {

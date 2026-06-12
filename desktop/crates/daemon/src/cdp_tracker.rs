@@ -7,7 +7,7 @@
 /// Brave's .desktop override at ~/.local/share/applications/brave-browser.desktop
 /// already includes `--remote-debugging-port=9222`.
 ///
-/// `focused_domain()` is the preferred method — it uses xdotool to identify which
+/// `focused_domain()` is the preferred method; it uses xdotool to identify which
 /// window is active, strips the browser suffix from the window title, and matches
 /// against the CDP tab list to return only the focused tab's domain.
 /// Falls back to `None` if xdotool is unavailable or no title match is found.
@@ -25,7 +25,7 @@ const BROWSER_SUFFIXES: &[&str] = &[
     " - Brave",
     " - Google Chrome",
     " - Chromium",
-    " – Firefox",
+    " - Firefox",
     " - Firefox",
     " - Microsoft Edge",
 ];
@@ -78,7 +78,7 @@ impl CdpTracker {
     /// otherwise returns an empty list.
     ///
     /// Used as a secondary check: if the user has a browser focused and a blocked
-    /// site is open in any tab, count it — even if AW reported a different tab.
+    /// site is open in any tab, count it; even if AW reported a different tab.
     pub fn all_domains_if_browser_focused(&self) -> Vec<String> {
         if !is_browser_window_active() {
             return Vec::new();
@@ -90,7 +90,7 @@ impl CdpTracker {
 /// Returns true if a browser window is currently the active (focused) window.
 ///
 /// Uses the window title (via `active_window_title()`) and checks whether it
-/// ends with a known browser suffix — xdotool has no `getwindowclassname`
+/// ends with a known browser suffix; xdotool has no `getwindowclassname`
 /// command on this system.
 fn is_browser_window_active() -> bool {
     let title = match active_window_title() {

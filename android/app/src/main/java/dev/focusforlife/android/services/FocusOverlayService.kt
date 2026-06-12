@@ -140,10 +140,10 @@ class FocusOverlayService : Service() {
         // while the framework is still rebinding after a process restart.
         unhealthyChecks++
         if (unhealthyChecks < 2) return
-        FocusLogger.w("Accessibility service unhealthy (check #$unhealthyChecks) — attempting auto-fix")
+        FocusLogger.w("Accessibility service unhealthy (check #$unhealthyChecks); attempting auto-fix")
         val fixed = AccessibilityUtils.ensureServiceEnabled(this)
         if (!fixed) {
-            FocusLogger.w("Accessibility service cannot be auto-fixed — alerting user")
+            FocusLogger.w("Accessibility service cannot be auto-fixed; alerting user")
             FocusForegroundNotifications.postAccessibilityDisabledAlert(this)
         }
     }

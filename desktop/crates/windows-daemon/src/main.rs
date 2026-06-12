@@ -1,4 +1,4 @@
-/// FocusForLife — Windows daemon (ffl-windows)
+/// FocusForLife Windows daemon (ffl-windows)
 ///
 /// Tracks the focused browser tab, enforces domain blocks via the hosts file,
 /// and syncs usage with Linux/Android via Firebase Realtime Database.

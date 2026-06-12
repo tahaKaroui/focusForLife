@@ -5,7 +5,7 @@
 /// focused/active tab, so the domain returned is always the tab the user is
 /// actually looking at.
 ///
-/// Identical to the Linux daemon version — pure HTTP, no platform-specific code.
+/// Identical to the Linux daemon version; pure HTTP, no platform-specific code.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;

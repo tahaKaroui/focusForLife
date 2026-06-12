@@ -19,7 +19,7 @@ import java.time.LocalDate
  * Combined usage is exposed via [remoteDailySeconds] and [remoteHourlyUsedSeconds].
  *
  * Credentials and the database URL come from BuildConfig (injected from
- * local.properties — see docs/firebase-setup.md). When they are not configured
+ * local.properties; see docs/firebase-setup.md). When they are not configured
  * sync is silently disabled and the app runs standalone.
  */
 object FocusSync {
@@ -83,7 +83,7 @@ object FocusSync {
     fun pushLocalState(dailySeconds: Long, hourlyUsedSeconds: Long, hourlyStamp: Long) {
         val ref = devicesRef
         if (ref == null) {
-            // Not authenticated yet — kick off sign-in; the next push will land.
+            // Not authenticated yet; kick off sign-in; the next push will land.
             ensureAuth { }
             return
         }

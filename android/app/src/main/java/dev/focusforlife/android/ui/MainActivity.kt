@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
         val cooldownSeconds = FocusRules.cooldownRemainingSeconds(this)
         uiState = DashboardState(
             blockStatus = blockStatus,
-            hardWindowRange = "${FocusRules.hardBlockStart().format(timeFormatter)} – ${FocusRules.hardBlockEnd().format(timeFormatter)}",
+            hardWindowRange = "${FocusRules.hardBlockStart().format(timeFormatter)} - ${FocusRules.hardBlockEnd().format(timeFormatter)}",
             remainingSeconds = FocusRules.remainingSeconds(this),
             isOverlayRunning = FocusOverlayService.isRunning(),
             sessionRemainingSeconds = FocusRules.sessionRemainingSeconds(this),
@@ -335,7 +335,7 @@ class MainActivity : ComponentActivity() {
 
 data class DashboardState(
     val blockStatus: FocusRules.BlockStatus = FocusRules.BlockStatus.NONE,
-    val hardWindowRange: String = "23:30 – 11:00",
+    val hardWindowRange: String = "23:30 - 11:00",
     val remainingSeconds: Long = 3600,
     val isOverlayRunning: Boolean = false,
     val sessionRemainingSeconds: Long = 600,
@@ -460,7 +460,7 @@ private fun HeroStatusCard(state: DashboardState) {
         FocusRules.BlockStatus.QUOTA -> Triple(
             StatusTone.WARNING,
             "Daily quota exhausted",
-            "The shared daily allowance is gone — see you tomorrow."
+            "The shared daily allowance is gone. See you tomorrow."
         )
         FocusRules.BlockStatus.NONE -> Triple(
             StatusTone.SUCCESS,
@@ -603,7 +603,7 @@ private fun GuardsCard(
             detail = if (state.isAccessibilityEnabled && state.isAccessibilityConnected) {
                 "Watching foreground apps"
             } else if (state.isAccessibilityEnabled) {
-                "Enabled but not running — repairing…"
+                "Enabled but not running, repairing…"
             } else {
                 "Accessibility service is off"
             },

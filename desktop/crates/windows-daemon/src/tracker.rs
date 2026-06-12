@@ -36,7 +36,7 @@ impl HourlyTracker {
     ) -> Result<()> {
         let stamp = hour_stamp(now);
 
-        // Hour rolled over — reset the bucket.
+        // Hour rolled over; reset the bucket.
         if stamp != self.current_stamp {
             self.current_stamp = stamp;
             self.used_seconds = 0;

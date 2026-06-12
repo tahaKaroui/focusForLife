@@ -4,6 +4,7 @@ use eframe::egui;
 
 const STATUS_FILE: &str = r"C:\ProgramData\FocusForLife\status.json";
 const SHIELD_PNG: &[u8] = include_bytes!("../../ui/assets/shield.png");
+const URBANIST_TTF: &[u8] = include_bytes!("../../ui/assets/Urbanist.ttf");
 
 // Brand palette (matches the Android app and the shield logo).
 const BG: egui::Color32 = egui::Color32::from_rgb(8, 29, 36);
@@ -52,6 +53,18 @@ fn load_window_icon() -> Option<egui::IconData> {
 }
 
 fn apply_brand_style(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "urbanist".to_owned(),
+        egui::FontData::from_static(URBANIST_TTF),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "urbanist".to_owned());
+    ctx.set_fonts(fonts);
+
     let mut style = (*ctx.style()).clone();
     style.visuals = egui::Visuals::dark();
     style.visuals.override_text_color = Some(CREAM);
@@ -151,7 +164,7 @@ impl App {
         match self.state.as_str() {
             "allowed" => (
                 "WITHIN SAFE WINDOW",
-                "Distracting sites are available — spend wisely.".to_string(),
+                "Distracting sites are available. Spend wisely.".to_string(),
                 GREEN,
             ),
             "blocked_hard_window" => (
@@ -160,7 +173,7 @@ impl App {
                     "Hard lockdown is active.".to_string()
                 } else {
                     format!(
-                        "Hard lockdown runs {} – {}.",
+                        "Hard lockdown runs {} - {}.",
                         self.hard_block_start, self.hard_block_end
                     )
                 },
@@ -173,12 +186,12 @@ impl App {
             ),
             "blocked_quota" => (
                 "DAILY QUOTA EXHAUSTED",
-                "The shared daily allowance is gone — see you tomorrow.".to_string(),
+                "The shared daily allowance is gone. See you tomorrow.".to_string(),
                 AMBER,
             ),
             _ => (
                 "WAITING FOR DAEMON",
-                "No status yet — is the FocusForLife daemon running?".to_string(),
+                "No status yet. Is the FocusForLife daemon running?".to_string(),
                 MUTED,
             ),
         }
@@ -273,7 +286,7 @@ impl eframe::App for App {
                 let (dot_color, text) = if self.status_ok {
                     (GREEN, "Daemon connected")
                 } else {
-                    (RED, "Daemon offline — waiting for status…")
+                    (RED, "Daemon offline, waiting for status…")
                 };
                 ui.horizontal(|ui| {
                     let total = ui.available_width();

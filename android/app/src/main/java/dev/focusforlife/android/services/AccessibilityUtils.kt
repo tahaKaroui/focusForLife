@@ -78,7 +78,7 @@ object AccessibilityUtils {
             FocusLogger.i("Accessibility service re-enabled programmatically")
             true
         } catch (e: SecurityException) {
-            FocusLogger.w("WRITE_SECURE_SETTINGS not granted — cannot auto-enable accessibility: ${e.message}")
+            FocusLogger.w("WRITE_SECURE_SETTINGS not granted; cannot auto-enable accessibility: ${e.message}")
             false
         }
     }
@@ -86,7 +86,7 @@ object AccessibilityUtils {
     /** Removes the service from the enabled list, then re-adds it shortly after. */
     fun forceRebind(context: Context): Boolean {
         if (!canSelfHeal(context)) {
-            FocusLogger.w("WRITE_SECURE_SETTINGS not granted — cannot force a11y rebind")
+            FocusLogger.w("WRITE_SECURE_SETTINGS not granted; cannot force a11y rebind")
             return false
         }
         if (rebindInFlight) return true

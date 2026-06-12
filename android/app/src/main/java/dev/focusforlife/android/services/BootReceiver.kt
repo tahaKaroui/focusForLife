@@ -32,7 +32,7 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         if (!autoEnabled && !AccessibilityUtils.isServiceEnabled(context)) {
-            FocusLogger.w("Accessibility disabled after reboot — launching setup")
+            FocusLogger.w("Accessibility disabled after reboot; launching setup")
             // Reset the MIUI setup flag so MainActivity re-opens autostart on next launch.
             context.getSharedPreferences("ffl_setup", Context.MODE_PRIVATE)
                 .edit()

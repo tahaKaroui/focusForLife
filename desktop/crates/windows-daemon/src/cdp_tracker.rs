@@ -1,14 +1,14 @@
-/// Chrome DevTools Protocol tab tracker — Windows edition.
+/// Chrome DevTools Protocol tab tracker; Windows edition.
 ///
 /// Three-tier hierarchy (same priority order as Linux daemon):
 ///
-/// Primary — ActivityWatch (see aw_tracker.rs): reports the focused tab only.
+/// Primary: ActivityWatch (see aw_tracker.rs): reports the focused tab only.
 ///
-/// Secondary — CDP focused tab: uses WinAPI GetForegroundWindow + GetWindowTextW
+/// Secondary: CDP focused tab: uses WinAPI GetForegroundWindow + GetWindowTextW
 ///   to read the active window title, strips the browser suffix, then matches
 ///   against the CDP /json tab list to return only the focused tab's domain.
 ///
-/// Tertiary — CDP all-tabs: if the browser window class is Chrome_WidgetWin_1
+/// Tertiary: CDP all-tabs: if the browser window class is Chrome_WidgetWin_1
 ///   (Brave/Chrome/Edge all use this) check every open tab for blocked domains.
 ///
 /// Browsers must be launched with --remote-debugging-port=<port>.
@@ -29,7 +29,7 @@ const BROWSER_SUFFIXES: &[&str] = &[
     " - Google Chrome",
     " - Chromium",
     " - Microsoft Edge",
-    " – Firefox",
+    " - Firefox",
     " - Firefox",
 ];
 

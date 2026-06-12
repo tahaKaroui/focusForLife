@@ -251,7 +251,7 @@ fn extract_domain(raw_url: &str) -> Option<String> {
 
 /// Copy the SQLite WAL and SHM companion files from `src` to `dst` (same
 /// base name with `-wal` / `-shm` suffix appended).  Failures are silently
-/// ignored — if the files don't exist there's nothing to copy.
+/// ignored; if the files don't exist there's nothing to copy.
 fn copy_wal_files(src: &Path, dst: &Path) {
     for suffix in ["-wal", "-shm"] {
         let src_companion = PathBuf::from(format!("{}{suffix}", src.display()));

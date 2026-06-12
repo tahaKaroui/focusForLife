@@ -6,7 +6,7 @@
 ///   { date, daily_seconds, hourly_used_seconds, hourly_stamp }
 ///
 /// Combined totals are computed locally: my_usage + sum(others).
-/// Pure HTTP REST against the RTDB + Google Identity Toolkit — no Firebase SDK.
+/// Pure HTTP REST against the RTDB + Google Identity Toolkit; no Firebase SDK.
 
 use std::time::{Duration, Instant};
 

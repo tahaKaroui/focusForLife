@@ -9,6 +9,7 @@ mod daemon_conn;
 use daemon_conn::DaemonConn;
 
 const SHIELD_PNG: &[u8] = include_bytes!("../assets/shield.png");
+const URBANIST_TTF: &[u8] = include_bytes!("../assets/Urbanist.ttf");
 
 // Brand palette (matches the Android app and the shield logo).
 const BG: egui::Color32 = egui::Color32::from_rgb(8, 29, 36);
@@ -67,6 +68,18 @@ fn load_window_icon() -> Option<egui::IconData> {
 }
 
 fn apply_brand_style(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "urbanist".to_owned(),
+        egui::FontData::from_static(URBANIST_TTF),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "urbanist".to_owned());
+    ctx.set_fonts(fonts);
+
     let mut style = (*ctx.style()).clone();
     style.visuals = egui::Visuals::dark();
     style.visuals.override_text_color = Some(CREAM);
@@ -168,13 +181,13 @@ fn state_badge(snap: &StatusSnapshot) -> StateBadge {
     match snap.state {
         FocusState::Allowed => StateBadge {
             label: "WITHIN SAFE WINDOW",
-            detail: "Distracting sites are available — spend wisely.".to_string(),
+            detail: "Distracting sites are available. Spend wisely.".to_string(),
             color: GREEN,
         },
         FocusState::BlockedHardWindow => StateBadge {
             label: "HIBERNATE WINDOW",
             detail: match (&snap.hard_block_start, &snap.hard_block_end) {
-                (Some(s), Some(e)) => format!("Hard lockdown runs {s} – {e}."),
+                (Some(s), Some(e)) => format!("Hard lockdown runs {s} - {e}."),
                 _ => "Hard lockdown is active.".to_string(),
             },
             color: RED,
@@ -189,7 +202,7 @@ fn state_badge(snap: &StatusSnapshot) -> StateBadge {
         },
         FocusState::BlockedQuota => StateBadge {
             label: "DAILY QUOTA EXHAUSTED",
-            detail: "The shared daily allowance is gone — see you tomorrow.".to_string(),
+            detail: "The shared daily allowance is gone. See you tomorrow.".to_string(),
             color: AMBER,
         },
     }
@@ -363,7 +376,7 @@ impl eframe::App for FflApp {
                             ui.add_space(6.0);
                             ui.label(
                                 egui::RichText::new(format!(
-                                    "⏳ Cooldown — unlocks in {}",
+                                    "⏳ Cooldown: unlocks in {}",
                                     fmt_duration(snap.cooldown_remaining_seconds)
                                 ))
                                 .color(AMBER)
@@ -379,7 +392,7 @@ impl eframe::App for FflApp {
                         ui.label(egui::RichText::new("Schedule").strong().size(14.0));
                         if let (Some(s), Some(e)) = (&snap.hard_block_start, &snap.hard_block_end) {
                             ui.label(
-                                egui::RichText::new(format!("🌙 Hard block {s} – {e}"))
+                                egui::RichText::new(format!("🌙 Hard block {s} - {e}"))
                                     .color(CREAM)
                                     .size(13.0),
                             );
@@ -408,7 +421,7 @@ impl eframe::App for FflApp {
                 let (dot_color, text) = if self.conn.is_some() {
                     (GREEN, "Daemon connected")
                 } else {
-                    (RED, "Daemon offline — reconnecting…")
+                    (RED, "Daemon offline, reconnecting…")
                 };
                 ui.horizontal(|ui| {
                     let total = ui.available_width();
@@ -420,7 +433,7 @@ impl eframe::App for FflApp {
             });
         });
 
-        // Prompt dialog — appears centered over main window.
+        // Prompt dialog; appears centered over main window.
         if let Some(prompt) = self.pending_prompt.clone() {
             egui::Window::new(
                 egui::RichText::new(&prompt.title).strong().color(CREAM),

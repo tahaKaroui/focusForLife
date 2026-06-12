@@ -550,7 +550,7 @@ fn run_cdp_tracking(
     loop {
         let now = chrono::Local::now();
 
-        // Check all open tabs right now — exact, no lag.
+        // Check all open tabs right now; exact, no lag.
         let on_target_cdp = tracker_cdp
             .poll_domains()
             .iter()
@@ -620,7 +620,7 @@ fn run_activitywatch_tracking(
     let mut aw = AwTracker::new(base_url, web_bucket_prefix);
     let cdp = CdpTracker::new(DEFAULT_CDP_PORTS.to_vec());
 
-    println!("ActivityWatch tracking active (focused-tab only — background tabs ignored)");
+    println!("ActivityWatch tracking active (focused-tab only; background tabs ignored)");
     println!("CDP fallback active on ports: {:?}", DEFAULT_CDP_PORTS);
 
     fs::create_dir_all("/run/focusforlife")?;

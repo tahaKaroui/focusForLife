@@ -18,7 +18,7 @@ fn check_and_repair() -> anyhow::Result<()> {
         .args(["is-active", "unbound"])
         .output()?;
     if out.stdout.trim_ascii() != b"active" {
-        eprintln!("unbound not active — restarting ffl-resolver");
+        eprintln!("unbound not active; restarting ffl-resolver");
         Command::new("systemctl")
             .args(["restart", "ffl-resolver"])
             .status()?;
@@ -28,7 +28,7 @@ fn check_and_repair() -> anyhow::Result<()> {
     let out = Command::new("nft").args(["list", "ruleset"]).output()?;
     let ruleset = String::from_utf8_lossy(&out.stdout);
     if !ruleset.contains("focusforlife") {
-        eprintln!("focusforlife nftables chain missing — restarting ffl-firewall");
+        eprintln!("focusforlife nftables chain missing; restarting ffl-firewall");
         Command::new("systemctl")
             .args(["restart", "ffl-firewall"])
             .status()?;

@@ -2,7 +2,7 @@
 ///
 /// Queries the local ActivityWatch server for the most recent event in the
 /// web bucket (written by the browser extension). The extension only logs the
-/// **focused/active tab** — background tabs are never recorded — so the domain
+/// **focused/active tab**; background tabs are never recorded; so the domain
 /// returned here is always the tab the user is actually looking at.
 ///
 /// This replaces CDP-based tracking for the purpose of "is the user currently
@@ -40,7 +40,7 @@ impl AwTracker {
     /// Returns the domain of the currently focused browser tab, or `None` if
     /// ActivityWatch is not running / no web bucket exists / no recent event.
     ///
-    /// "Recent" means the latest event from the heartbeat bucket — AW sends a
+    /// "Recent" means the latest event from the heartbeat bucket; AW sends a
     /// heartbeat every few seconds while the tab is active, so the last event
     /// is effectively the current tab.
     pub fn focused_domain(&mut self) -> Option<String> {
@@ -98,7 +98,7 @@ fn fetch_latest_domain(base_url: &str, bucket_id: &str) -> Option<String> {
                 .unwrap_or_default()
                 .as_secs_f64();
             if now_secs - event_end_secs > MAX_EVENT_AGE_SECS {
-                return None; // stale — browser not actively on this tab
+                return None; // stale; browser not actively on this tab
             }
         }
     }

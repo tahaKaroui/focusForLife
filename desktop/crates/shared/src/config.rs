@@ -57,7 +57,7 @@ pub struct Rules {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HourlyOverride {
-    /// Clock hours (0–23) this override applies to.
+    /// Clock hours (0-23) this override applies to.
     pub hours: Vec<u32>,
     /// Limit in minutes for these hours.
     pub limit_minutes: u32,

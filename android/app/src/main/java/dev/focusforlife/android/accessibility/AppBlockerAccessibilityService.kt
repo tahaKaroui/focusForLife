@@ -118,7 +118,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
                 updateBrowserTracking(packageName, blockedDomain)
             }
         } else if (activeBrowserDomain != null && packageName != activeBrowserPackage) {
-            // Use the actual root window to decide — during fullscreen the browser is
+            // Use the actual root window to decide; during fullscreen the browser is
             // still the root even if system packages fire events alongside it.
             val rootPkg = rootInActiveWindow?.packageName?.toString()
             if (rootPkg == null || !browserPackages.contains(rootPkg)) {
@@ -509,7 +509,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         if (!blockedApps.contains(rootPackage)) {
             if (activePackage != null) {
                 // Always use a pending stop (grace period) rather than immediately
-                // finalizing — MIUI overlays and notification peeks frequently appear
+                // finalizing; MIUI overlays and notification peeks frequently appear
                 // as the root window for one tick and would otherwise kill the timer.
                 schedulePendingStop()
             }
@@ -588,7 +588,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         /**
          * True only while the framework has this service bound. Survives nothing:
          * a process kill (MIUI "clear all") resets it to false while the secure
-         * setting still lists the service — that mismatch is the zombie state the
+         * setting still lists the service; that mismatch is the zombie state the
          * overlay watchdog repairs via AccessibilityUtils.forceRebind().
          */
         @Volatile private var connected = false
