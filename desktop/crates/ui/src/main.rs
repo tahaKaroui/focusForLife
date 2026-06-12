@@ -67,6 +67,58 @@ fn load_window_icon() -> Option<egui::IconData> {
     })
 }
 
+
+const SHIELD_TEAL: egui::Color32 = egui::Color32::from_rgb(24, 88, 107);
+
+fn cubic_to(p0: (f32, f32), p1: (f32, f32), p2: (f32, f32), p3: (f32, f32), out: &mut Vec<(f32, f32)>) {
+    for i in 1..=12 {
+        let t = i as f32 / 12.0;
+        let u = 1.0 - t;
+        out.push((
+            u * u * u * p0.0 + 3.0 * u * u * t * p1.0 + 3.0 * u * t * t * p2.0 + t * t * t * p3.0,
+            u * u * u * p0.1 + 3.0 * u * u * t * p1.1 + 3.0 * u * t * t * p2.1 + t * t * t * p3.1,
+        ));
+    }
+}
+
+/// Same geometry as the Android vector drawable (24x24 unit space).
+fn shield_outline(scale: f32) -> Vec<(f32, f32)> {
+    let mut pts = vec![(12.0, 1.6), (20.4, 4.7), (20.4, 11.0)];
+    cubic_to((20.4, 11.0), (20.4, 16.7), (17.0, 20.8), (12.0, 22.5), &mut pts);
+    cubic_to((12.0, 22.5), (7.0, 20.8), (3.6, 16.7), (3.6, 11.0), &mut pts);
+    pts.push((3.6, 4.7));
+    pts.into_iter()
+        .map(|(x, y)| (12.0 + (x - 12.0) * scale, 12.05 + (y - 12.05) * scale))
+        .collect()
+}
+
+/// Crisp vector logo, drawn directly so it stays sharp at any size or DPI.
+fn draw_logo(ui: &mut egui::Ui, size: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    let unit = size / 24.0;
+    let to = move |pt: (f32, f32)| egui::pos2(rect.left() + pt.0 * unit, rect.top() + pt.1 * unit);
+    let painter = ui.painter();
+    painter.add(egui::Shape::convex_polygon(
+        shield_outline(1.0).into_iter().map(to).collect(),
+        SHIELD_TEAL,
+        egui::Stroke::NONE,
+    ));
+    painter.add(egui::Shape::convex_polygon(
+        shield_outline(0.78).into_iter().map(to).collect(),
+        ORANGE,
+        egui::Stroke::NONE,
+    ));
+    painter.add(egui::Shape::line(
+        vec![to((7.17, 14.76)), to((10.65, 11.27)), to((12.73, 13.35)), to((15.3, 10.8))],
+        egui::Stroke::new(1.05 * unit, egui::Color32::WHITE),
+    ));
+    painter.add(egui::Shape::convex_polygon(
+        vec![to((14.08, 8.88)), to((17.2, 8.88)), to((17.2, 12.0))],
+        egui::Color32::WHITE,
+        egui::Stroke::NONE,
+    ));
+}
+
 fn apply_brand_style(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert(
@@ -94,9 +146,6 @@ fn apply_brand_style(ctx: &egui::Context) {
     style.visuals.selection.bg_fill = ORANGE.linear_multiply(0.4);
     style.spacing.item_spacing = egui::vec2(8.0, 8.0);
     style.spacing.button_padding = egui::vec2(14.0, 7.0);
-    for (_, font) in style.text_styles.iter_mut() {
-        font.size *= 1.05;
-    }
     ctx.set_style(style);
 }
 
@@ -122,7 +171,6 @@ struct FflApp {
     status: Option<StatusSnapshot>,
     pending_prompt: Option<PromptRequest>,
     retry_at: Instant,
-    logo: Option<egui::TextureHandle>,
 }
 
 impl FflApp {
@@ -133,7 +181,6 @@ impl FflApp {
             status: None,
             pending_prompt: None,
             retry_at: Instant::now(),
-            logo: None,
         }
     }
 
@@ -147,15 +194,6 @@ impl FflApp {
         }
     }
 
-    fn logo_texture(&mut self, ctx: &egui::Context) -> Option<egui::TextureHandle> {
-        if self.logo.is_none() {
-            let img = image::load_from_memory(SHIELD_PNG).ok()?.into_rgba8();
-            let size = [img.width() as usize, img.height() as usize];
-            let color = egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw());
-            self.logo = Some(ctx.load_texture("ffl-shield", color, Default::default()));
-        }
-        self.logo.clone()
-    }
 }
 
 fn fmt_duration(total_seconds: u32) -> String {
@@ -285,19 +323,14 @@ impl eframe::App for FflApp {
         // Keep UI refreshing even without input events.
         ctx.request_repaint_after(Duration::from_secs(1));
 
-        let logo = self.logo_texture(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add_space(4.0);
 
             // ---- Brand header ----
             ui.horizontal(|ui| {
-                if let Some(tex) = &logo {
-                    let h = 48.0;
-                    let w = h * tex.aspect_ratio();
-                    ui.image((tex.id(), egui::vec2(w, h)));
-                    ui.add_space(4.0);
-                }
+                draw_logo(ui, 44.0);
+                ui.add_space(4.0);
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -305,7 +338,7 @@ impl eframe::App for FflApp {
                         ui.label(egui::RichText::new("For").size(24.0).strong().color(ORANGE));
                         ui.label(egui::RichText::new("Life").size(24.0).strong().color(CREAM));
                     });
-                    ui.label(egui::RichText::new("Guard your attention").color(MUTED).size(12.5));
+                    ui.label(egui::RichText::new("Guard your attention").color(MUTED).size(13.0));
                 });
             });
             ui.add_space(8.0);
@@ -366,7 +399,7 @@ impl eframe::App for FflApp {
                                 .strong()
                                 .color(CREAM),
                         );
-                        ui.label(egui::RichText::new("daily time left").color(MUTED).size(12.5));
+                        ui.label(egui::RichText::new("daily time left").color(MUTED).size(13.0));
                         ui.add_space(8.0);
                         quota_bar(ui, "Today", daily_rem, snap.daily_quota_seconds, ORANGE);
                         ui.add_space(4.0);
@@ -428,7 +461,7 @@ impl eframe::App for FflApp {
                     let approx = 150.0;
                     ui.add_space((total - approx).max(0.0) / 2.0);
                     dot(ui, dot_color, 4.0);
-                    ui.label(egui::RichText::new(text).color(MUTED).size(11.5));
+                    ui.label(egui::RichText::new(text).color(MUTED).size(12.0));
                 });
             });
         });
