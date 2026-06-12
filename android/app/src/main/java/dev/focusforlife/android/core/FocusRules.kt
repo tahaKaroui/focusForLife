@@ -126,6 +126,11 @@ object FocusRules {
         return (DAILY_QUOTA_SECONDS - used).coerceAtLeast(0)
     }
 
+    fun dailyQuotaSeconds(): Long = DAILY_QUOTA_SECONDS
+
+    fun currentHourlyLimitSeconds(): Long =
+        TimeUnit.MILLISECONDS.toSeconds(hourlyLimitMs(System.currentTimeMillis()))
+
     fun sessionRemainingSeconds(context: Context): Long {
         synchronized(lock) {
             ensureFreshDay(context)

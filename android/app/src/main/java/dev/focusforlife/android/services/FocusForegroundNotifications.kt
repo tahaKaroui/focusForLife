@@ -48,7 +48,7 @@ object FocusForegroundNotifications {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentImmutableFlag()
         val pending = PendingIntent.getActivity(context, 99, intent, flags)
         val notification = NotificationCompat.Builder(context, ALERT_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_shield)
             .setContentTitle("FocusForLife is OFF!")
             .setContentText("Tap to re-enable the accessibility service.")
             .setStyle(NotificationCompat.BigTextStyle()
@@ -89,7 +89,7 @@ object FocusForegroundNotifications {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentImmutableFlag()
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, flags)
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_shield)
             .setContentIntent(pendingIntent)
             .setOnlyAlertOnce(true)
     }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: white shield silhouette with the rising arrow cut out
+     (single even-odd path so the cut is real alpha). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,1.6 L20.4,4.7 L20.4,11 C20.4,16.7 17,20.8 12,22.5 C7,20.8 3.6,16.7 3.6,11 L3.6,4.7 Z
+            M14.08,8.88 L15.27,10.07 L12.73,12.61 L10.65,10.53 L6.8,14.39 L7.53,15.12 L10.65,12 L12.73,14.08 L16.01,10.81 L17.2,12 L17.2,8.88 Z" />
+</vector>

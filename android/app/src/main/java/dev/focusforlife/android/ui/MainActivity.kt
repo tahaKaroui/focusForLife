@@ -16,52 +16,67 @@ import android.text.TextUtils
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.focusforlife.android.R
 import dev.focusforlife.android.accessibility.AppBlockerAccessibilityService
-import dev.focusforlife.android.admin.FocusAdminReceiver
 import dev.focusforlife.android.admin.DeviceOwnerController
-import dev.focusforlife.android.core.FocusLockManager
 import dev.focusforlife.android.core.FocusRules
 import dev.focusforlife.android.core.FocusTargets
 import dev.focusforlife.android.logging.FocusLogger
+import dev.focusforlife.android.services.AccessibilityUtils
 import dev.focusforlife.android.services.FocusOverlayService
 import dev.focusforlife.android.services.FocusVpnService
+import dev.focusforlife.android.ui.theme.BrandOrange
+import dev.focusforlife.android.ui.theme.DangerRed
 import dev.focusforlife.android.ui.theme.FocusForLifeTheme
+import dev.focusforlife.android.ui.theme.SuccessGreen
+import dev.focusforlife.android.ui.theme.WarnAmber
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -69,6 +84,10 @@ import kotlinx.coroutines.isActive
 
 /**
  * Compose dashboard that shows blocker state, remaining quota, and per-app stats.
+ *
+ * NOTE: the Protection section (device admin toggle, PIN management, disable
+ * request, maintenance unlock) is temporarily removed from the UI. The
+ * underlying FocusLockManager / DeviceOwnerController logic is untouched.
  */
 class MainActivity : ComponentActivity() {
 
@@ -96,13 +115,7 @@ class MainActivity : ComponentActivity() {
                         onStopVpn = { stopVpnService() },
                         onStartOverlay = { startOverlayService() },
                         onStopOverlay = { stopOverlayService() },
-                        onEnableDeviceAdmin = { requestDeviceAdmin() },
-                        onRequestExactAlarm = { requestExactAlarmPermission() },
-                        onRequestMaintenance = { pin -> requestMaintenanceUnlock(pin) },
-                        onEndMaintenance = { endMaintenance() },
-                        onSetPin = { currentPin, newPin -> setPin(currentPin, newPin) },
-                        onRequestDisable = { pin -> requestDisable(pin) },
-                        onDisableNow = { disableNow() }
+                        onRequestExactAlarm = { requestExactAlarmPermission() }
                     )
                 }
             }
@@ -112,6 +125,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         FocusLogger.v("MainActivity resumed")
+        // Self-heal: if the accessibility service is listed but unbound (e.g. after
+        // a MIUI "clear all"), this rebinds it without the manual toggle dance.
+        AccessibilityUtils.ensureServiceEnabled(this)
         refreshDashboard()
         DeviceOwnerController.applyPolicies(this)
         DeviceOwnerController.enforceLockTask(this)
@@ -141,20 +157,17 @@ class MainActivity : ComponentActivity() {
             sessionRemainingSeconds = FocusRules.sessionRemainingSeconds(this),
             nextLockSeconds = FocusRules.nextLockWindowSeconds(this),
             isAccessibilityEnabled = isAccessibilityEnabled(),
+            isAccessibilityConnected = AppBlockerAccessibilityService.isConnected(),
             isVpnRunning = FocusVpnService.isRunning(),
-            isDeviceAdminEnabled = isDeviceAdminEnabled(),
-            hasPin = FocusLockManager.hasPin(this),
+            canSelfHeal = AccessibilityUtils.canSelfHeal(this),
             exactAlarmAllowed = isExactAlarmAllowed(),
-            isDeviceOwner = DeviceOwnerController.isDeviceOwner(this),
-            isMaintenanceActive = FocusLockManager.isMaintenanceActive(this),
-            maintenanceRemainingSeconds = FocusLockManager.maintenanceRemainingSeconds(this),
+            dailyQuotaSeconds = FocusRules.dailyQuotaSeconds(),
+            hourlyLimitSeconds = FocusRules.currentHourlyLimitSeconds(),
             blockedApps = FocusTargets.blockedAppPackages,
             blockedDomains = FocusTargets.blockedDomains,
             perAppUsage = FocusRules.getPerAppUsageSeconds(this),
             cooldownRemainingSeconds = cooldownSeconds,
-            isCooldownActive = blockStatus == FocusRules.BlockStatus.COOLDOWN && cooldownSeconds > 0,
-            disableRemainingSeconds = FocusLockManager.disableRemainingSeconds(this),
-            disableReady = FocusLockManager.isDisableReady(this)
+            isCooldownActive = blockStatus == FocusRules.BlockStatus.COOLDOWN && cooldownSeconds > 0
         )
     }
 
@@ -234,24 +247,6 @@ class MainActivity : ComponentActivity() {
         return false
     }
 
-    private fun isDeviceAdminEnabled(): Boolean {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return dpm.isAdminActive(ComponentName(this, FocusAdminReceiver::class.java))
-    }
-
-    private fun requestDeviceAdmin() {
-        val component = ComponentName(this, FocusAdminReceiver::class.java)
-        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
-            putExtra(
-                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                "Enable admin to make uninstall harder and add a disable delay."
-            )
-        }
-        FocusLogger.i("Requesting device admin")
-        startActivity(intent)
-    }
-
     private fun isExactAlarmAllowed(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -268,83 +263,6 @@ class MainActivity : ComponentActivity() {
         }
         FocusLogger.i("Requesting exact alarm permission")
         startActivity(intent)
-    }
-
-    private fun setPin(currentPin: String, newPin: String) {
-        val hasPin = FocusLockManager.hasPin(this)
-        if (newPin.length < 4) {
-            toast("New PIN must be at least 4 digits.")
-            return
-        }
-        if (hasPin && !FocusLockManager.verifyPin(this, currentPin)) {
-            toast("Wrong current PIN.")
-            return
-        }
-        FocusLogger.i("Updating PIN (hasExisting=$hasPin)")
-        FocusLockManager.setPin(this, newPin)
-        toast("PIN updated.")
-        refreshDashboard()
-    }
-
-    private fun requestDisable(pin: String) {
-        if (!FocusLockManager.hasPin(this)) {
-            toast("Set a PIN first.")
-            return
-        }
-        if (!FocusLockManager.verifyPin(this, pin)) {
-            toast("Wrong PIN.")
-            return
-        }
-        FocusLogger.i("Disable request accepted")
-        FocusLockManager.requestDisable(this)
-        toast("Disable scheduled. Wait 10 minutes.")
-        refreshDashboard()
-    }
-
-    private fun requestMaintenanceUnlock(pin: String) {
-        if (!DeviceOwnerController.isDeviceOwner(this)) {
-            toast("Device owner not enabled.")
-            return
-        }
-        if (!FocusLockManager.verifyPin(this, pin)) {
-            toast("Wrong PIN.")
-            return
-        }
-        FocusLockManager.startMaintenanceWindow(this)
-        DeviceOwnerController.applyPolicies(this)
-        DeviceOwnerController.exitLockTask(this)
-        toast("Maintenance unlocked for 10 minutes.")
-        refreshDashboard()
-    }
-
-    private fun endMaintenance() {
-        if (!DeviceOwnerController.isDeviceOwner(this)) return
-        FocusLockManager.clearMaintenanceWindow(this)
-        DeviceOwnerController.applyPolicies(this)
-        DeviceOwnerController.enforceLockTask(this)
-        toast("Maintenance ended.")
-        refreshDashboard()
-    }
-
-    private fun disableNow() {
-        if (!FocusLockManager.isDisableReady(this)) {
-            toast("Disable window not reached yet.")
-            return
-        }
-        val vpnIntent = Intent(this, FocusVpnService::class.java).apply {
-            action = FocusVpnService.ACTION_STOP
-        }
-        val overlayIntent = Intent(this, FocusOverlayService::class.java).apply {
-            action = FocusOverlayService.ACTION_STOP
-        }
-        startService(vpnIntent)
-        startService(overlayIntent)
-        stopService(vpnIntent)
-        stopService(overlayIntent)
-        FocusLockManager.clearDisableRequest(this)
-        FocusLogger.i("Disable executed: VPN + overlay stopped")
-        toast("VPN + overlay stopped. Disable accessibility manually if needed.")
-        refreshDashboard()
     }
 
     private fun ensureBootSurvivalSetup() {
@@ -417,29 +335,25 @@ class MainActivity : ComponentActivity() {
 
 data class DashboardState(
     val blockStatus: FocusRules.BlockStatus = FocusRules.BlockStatus.NONE,
-    val hardWindowRange: String = "23:00 – 11:00",
+    val hardWindowRange: String = "23:30 – 11:00",
     val remainingSeconds: Long = 3600,
     val isOverlayRunning: Boolean = false,
     val sessionRemainingSeconds: Long = 600,
     val nextLockSeconds: Long = 600,
     val isAccessibilityEnabled: Boolean = false,
+    val isAccessibilityConnected: Boolean = false,
     val isVpnRunning: Boolean = false,
-    val isDeviceAdminEnabled: Boolean = false,
-    val hasPin: Boolean = false,
+    val canSelfHeal: Boolean = false,
     val exactAlarmAllowed: Boolean = true,
-    val isDeviceOwner: Boolean = false,
-    val isMaintenanceActive: Boolean = false,
-    val maintenanceRemainingSeconds: Long = 0L,
+    val dailyQuotaSeconds: Long = 3600,
+    val hourlyLimitSeconds: Long = 600,
     val blockedApps: List<String> = emptyList(),
     val blockedDomains: List<String> = emptyList(),
     val perAppUsage: Map<String, Long> = emptyMap(),
     val cooldownRemainingSeconds: Long = 0L,
-    val isCooldownActive: Boolean = false,
-    val disableRemainingSeconds: Long = 0L,
-    val disableReady: Boolean = false
+    val isCooldownActive: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     state: DashboardState,
@@ -449,172 +363,194 @@ fun DashboardScreen(
     onStopVpn: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
-    onEnableDeviceAdmin: () -> Unit,
-    onRequestExactAlarm: () -> Unit,
-    onRequestMaintenance: (String) -> Unit,
-    onEndMaintenance: () -> Unit,
-    onSetPin: (String, String) -> Unit,
-    onRequestDisable: (String) -> Unit,
-    onDisableNow: () -> Unit
+    onRequestExactAlarm: () -> Unit
 ) {
-    var currentPin by androidx.compose.runtime.remember { mutableStateOf("") }
-    var newPin by androidx.compose.runtime.remember { mutableStateOf("") }
-    var maintenancePin by androidx.compose.runtime.remember { mutableStateOf("") }
-    var showMaintenanceDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
-
     LaunchedEffect(Unit) {
         while (isActive) {
             onRefresh()
             delay(1_000)
         }
     }
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("FocusForLife Control Center") }
-            )
-        }
-    ) { innerPadding ->
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        BrandHeader(state)
+        HeroStatusCard(state)
+        GuardsCard(
+            state = state,
+            onEnableAccessibility = onEnableAccessibility,
+            onEnableVpn = onEnableVpn,
+            onStopVpn = onStopVpn,
+            onStartOverlay = onStartOverlay,
+            onStopOverlay = onStopOverlay,
+            onRequestExactAlarm = onRequestExactAlarm
+        )
+        BlockTargetsCard(state)
+        UsageCard(state)
+        Text(
+            text = "FocusForLife · guard your attention",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            StatusCard(state)
-            ServiceCard(
-                state = state,
-                onEnableAccessibility = onEnableAccessibility,
-                onEnableVpn = onEnableVpn,
-                onStopVpn = onStopVpn,
-                onStartOverlay = onStartOverlay,
-                onStopOverlay = onStopOverlay,
-                onRequestExactAlarm = onRequestExactAlarm
-            )
-            ProtectionCard(
-                state = state,
-                currentPin = currentPin,
-                newPin = newPin,
-                onCurrentPinChange = { currentPin = it },
-                onNewPinChange = { newPin = it },
-                onEnableDeviceAdmin = onEnableDeviceAdmin,
-                onSetPin = { onSetPin(currentPin, newPin) },
-                onRequestDisable = { onRequestDisable(currentPin) },
-                onDisableNow = onDisableNow,
-                onRequestMaintenance = { showMaintenanceDialog = true },
-                onEndMaintenance = onEndMaintenance
-            )
-            BlockTargetsCard(state)
-            UsageCard(state)
-        }
-    }
-
-    if (showMaintenanceDialog) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showMaintenanceDialog = false },
-            title = { Text("Maintenance Unlock") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter PIN to unlock maintenance for 10 minutes.")
-                    OutlinedTextField(
-                        value = maintenancePin,
-                        onValueChange = { maintenancePin = it },
-                        label = { Text("PIN") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onRequestMaintenance(maintenancePin)
-                        maintenancePin = ""
-                        showMaintenanceDialog = false
-                    }
-                ) { Text("Unlock") }
-            },
-            dismissButton = {
-                Button(onClick = { showMaintenanceDialog = false }) { Text("Cancel") }
-            }
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 8.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
 
 @Composable
-private fun ProtectionCard(
-    state: DashboardState,
-    currentPin: String,
-    newPin: String,
-    onCurrentPinChange: (String) -> Unit,
-    onNewPinChange: (String) -> Unit,
-    onEnableDeviceAdmin: () -> Unit,
-    onSetPin: () -> Unit,
-    onRequestDisable: () -> Unit,
-    onDisableNow: () -> Unit,
-    onRequestMaintenance: () -> Unit,
-    onEndMaintenance: () -> Unit
-) {
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Protection", style = MaterialTheme.typography.titleMedium)
+private fun BrandHeader(state: DashboardState) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_ffl_logo),
+            contentDescription = "FocusForLife logo",
+            modifier = Modifier.size(44.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
             Text(
-                text = if (state.isDeviceAdminEnabled) "Device admin: ON" else "Device admin: OFF",
-                color = if (state.isDeviceAdminEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.SemiBold
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) { append("Focus") }
+                    withStyle(
+                        SpanStyle(fontWeight = FontWeight.ExtraBold, color = BrandOrange)
+                    ) { append("For") }
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) { append("Life") }
+                },
+                style = MaterialTheme.typography.headlineSmall
             )
-            if (!state.isDeviceAdminEnabled) {
-                Button(onClick = onEnableDeviceAdmin) { Text("Enable Device Admin") }
-            }
-            OutlinedTextField(
-                value = currentPin,
-                onValueChange = onCurrentPinChange,
-                label = { Text("Current PIN (for disable)") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
+            Text(
+                text = "Guard your attention",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            OutlinedTextField(
-                value = newPin,
-                onValueChange = onNewPinChange,
-                label = { Text("New PIN") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Button(onClick = onSetPin) {
-                Text(if (state.hasPin) "Change PIN" else "Set PIN")
-            }
-            Button(onClick = onRequestDisable) {
-                Text("Request Disable (10 min delay)")
-            }
-            if (state.isDeviceOwner) {
-                Text(
-                    text = if (state.isMaintenanceActive) {
-                        "Maintenance active: ${formatDuration(state.maintenanceRemainingSeconds)}"
-                    } else {
-                        "Maintenance: OFF"
-                    },
-                    color = if (state.isMaintenanceActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        Spacer(Modifier.weight(1f))
+        StatusDot(
+            healthy = state.isAccessibilityEnabled && state.isAccessibilityConnected,
+            size = 12.dp
+        )
+    }
+}
+
+private enum class StatusTone { SUCCESS, WARNING, DANGER }
+
+@Composable
+private fun HeroStatusCard(state: DashboardState) {
+    val (tone, title, description) = when (state.blockStatus) {
+        FocusRules.BlockStatus.HARD_WINDOW -> Triple(
+            StatusTone.DANGER,
+            "Hibernate window",
+            "Lockdown runs ${state.hardWindowRange}. Everything blocked stays off."
+        )
+        FocusRules.BlockStatus.COOLDOWN -> Triple(
+            StatusTone.WARNING,
+            "Hourly limit reached",
+            "Unlocks in ${formatDuration(state.cooldownRemainingSeconds)} at the top of the hour."
+        )
+        FocusRules.BlockStatus.QUOTA -> Triple(
+            StatusTone.WARNING,
+            "Daily quota exhausted",
+            "The shared daily allowance is gone — see you tomorrow."
+        )
+        FocusRules.BlockStatus.NONE -> Triple(
+            StatusTone.SUCCESS,
+            "Within safe window",
+            "Next lock in ${formatDuration(state.nextLockSeconds)}."
+        )
+    }
+    val accent = when (tone) {
+        StatusTone.SUCCESS -> SuccessGreen
+        StatusTone.WARNING -> WarnAmber
+        StatusTone.DANGER -> DangerRed
+    }
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
                 )
-                if (state.isMaintenanceActive) {
-                    Button(onClick = onEndMaintenance) { Text("End Maintenance") }
-                } else {
-                    Button(onClick = onRequestMaintenance) { Text("Maintenance Unlock") }
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(accent.copy(alpha = 0.18f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(accent)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            title.uppercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = accent,
+                            letterSpacing = 1.sp
+                        )
+                    }
                 }
             }
-            if (state.disableRemainingSeconds > 0) {
+
+            Column {
                 Text(
-                    "Disable in ${formatDuration(state.disableRemainingSeconds)}",
+                    text = formatDuration(state.remainingSeconds),
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "daily time left",
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Button(onClick = onDisableNow, enabled = state.disableReady) {
-                Text("Disable Now")
-            }
+
+            QuotaBar(
+                label = "Today",
+                valueText = formatDuration(state.remainingSeconds),
+                fraction = state.remainingSeconds.toFloat() /
+                    state.dailyQuotaSeconds.coerceAtLeast(1).toFloat(),
+                color = BrandOrange
+            )
+            QuotaBar(
+                label = "This hour",
+                valueText = formatDuration(state.sessionRemainingSeconds),
+                fraction = state.sessionRemainingSeconds.toFloat() /
+                    state.hourlyLimitSeconds.coerceAtLeast(1).toFloat(),
+                color = MaterialTheme.colorScheme.secondary
+            )
+
             Text(
-                "To uninstall, you must turn off device admin first.",
+                text = description,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Hard block ${state.hardWindowRange} · Hourly limit ${formatDuration(state.hourlyLimitSeconds)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -623,50 +559,36 @@ private fun ProtectionCard(
 }
 
 @Composable
-private fun StatusCard(state: DashboardState) {
-    val (title, description, tone) = when (state.blockStatus) {
-        FocusRules.BlockStatus.HARD_WINDOW -> Triple(
-            "Hibernate Window Active",
-            "Focus lockdown runs ${state.hardWindowRange}. All blocked apps + domains are disabled.",
-            StatusTone.DANGER
-        )
-        FocusRules.BlockStatus.COOLDOWN -> Triple(
-            "Hourly Limit Reached",
-            "You used the 10-minute hourly quota. Resets in ${formatDuration(state.cooldownRemainingSeconds)}.",
-            StatusTone.WARNING
-        )
-        FocusRules.BlockStatus.QUOTA -> Triple(
-            "Daily Quota Exhausted",
-            "The shared 1-hour allowance is gone. All blocked targets stay off until 23:00.",
-            StatusTone.WARNING
-        )
-        FocusRules.BlockStatus.NONE -> Triple(
-            "Within Safe Window",
-            "You have ${formatDuration(state.remainingSeconds)} left. Hourly limit is 10 minutes.",
-            StatusTone.SUCCESS
-        )
-    }
-    ColoredCard(tone = tone) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.size(4.dp))
-        Text(description, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.size(8.dp))
-        Text(
-            "Next lock in ${formatDuration(state.nextLockSeconds)} (hourly left: ${formatDuration(state.sessionRemainingSeconds)}, daily left: ${formatDuration(state.remainingSeconds)}).",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.size(4.dp))
-        Text(
-            "Hard block window: ${state.hardWindowRange}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+private fun QuotaBar(label: String, valueText: String, fraction: Float, color: Color) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                valueText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        LinearProgressIndicator(
+            progress = { fraction.coerceIn(0f, 1f) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = color,
+            trackColor = MaterialTheme.colorScheme.surface,
+            drawStopIndicator = {}
         )
     }
 }
 
 @Composable
-private fun ServiceCard(
+private fun GuardsCard(
     state: DashboardState,
     onEnableAccessibility: () -> Unit,
     onEnableVpn: () -> Unit,
@@ -675,91 +597,130 @@ private fun ServiceCard(
     onStopOverlay: () -> Unit,
     onRequestExactAlarm: () -> Unit
 ) {
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Guards", style = MaterialTheme.typography.titleMedium)
-            ServiceStatusRow(
-                label = "Accessibility Blocker",
-                enabled = state.isAccessibilityEnabled,
-                primaryActionLabel = "Enable",
-                onPrimaryAction = onEnableAccessibility
+    SectionCard(title = "Guards") {
+        GuardRow(
+            label = "App blocker",
+            detail = if (state.isAccessibilityEnabled && state.isAccessibilityConnected) {
+                "Watching foreground apps"
+            } else if (state.isAccessibilityEnabled) {
+                "Enabled but not running — repairing…"
+            } else {
+                "Accessibility service is off"
+            },
+            healthy = state.isAccessibilityEnabled && state.isAccessibilityConnected,
+            actionLabel = if (state.isAccessibilityEnabled && state.isAccessibilityConnected) null else "Enable",
+            onAction = onEnableAccessibility
+        )
+        GuardRow(
+            label = "Network blocker",
+            detail = if (state.isVpnRunning) "DNS filtering active" else "VPN filter is off",
+            healthy = state.isVpnRunning,
+            actionLabel = if (state.isVpnRunning) "Stop" else "Enable",
+            onAction = if (state.isVpnRunning) onStopVpn else onEnableVpn
+        )
+        GuardRow(
+            label = "Floating timer",
+            detail = if (state.isOverlayRunning) "Bubble on screen" else "Bubble hidden",
+            healthy = state.isOverlayRunning,
+            actionLabel = if (state.isOverlayRunning) "Hide" else "Show",
+            onAction = if (state.isOverlayRunning) onStopOverlay else onStartOverlay
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            GuardRow(
+                label = "Exact alarms",
+                detail = if (state.exactAlarmAllowed) "Precise restarts allowed" else "Needed for reliable restarts",
+                healthy = state.exactAlarmAllowed,
+                actionLabel = if (state.exactAlarmAllowed) null else "Allow",
+                onAction = onRequestExactAlarm
             )
-            ServiceStatusRow(
-                label = "Network Blocker (VPN)",
-                enabled = state.isVpnRunning,
-                primaryActionLabel = "Enable",
-                onPrimaryAction = onEnableVpn,
-                secondaryActionLabel = "Stop",
-                onSecondaryAction = onStopVpn
+        }
+        GuardRow(
+            label = "Self-heal",
+            detail = if (state.canSelfHeal) {
+                "Auto-repairs the blocker after RAM purges"
+            } else {
+                "Grant once: adb shell pm grant <pkg> WRITE_SECURE_SETTINGS"
+            },
+            healthy = state.canSelfHeal,
+            actionLabel = null,
+            onAction = {}
+        )
+    }
+}
+
+@Composable
+private fun GuardRow(
+    label: String,
+    detail: String,
+    healthy: Boolean,
+    actionLabel: String?,
+    onAction: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        StatusDot(healthy = healthy, size = 10.dp)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            ServiceStatusRow(
-                label = "Overlay Timer",
-                enabled = state.isOverlayRunning,
-                primaryActionLabel = "Show",
-                onPrimaryAction = onStartOverlay,
-                secondaryActionLabel = "Hide",
-                onSecondaryAction = onStopOverlay
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val enableExactAlarmLabel = if (state.exactAlarmAllowed) null else "Enable"
-                val enableExactAlarmAction = if (state.exactAlarmAllowed) null else onRequestExactAlarm
-                ServiceStatusRow(
-                    label = "Exact Alarm Precision",
-                    enabled = state.exactAlarmAllowed,
-                    primaryActionLabel = enableExactAlarmLabel,
-                    onPrimaryAction = enableExactAlarmAction
-                )
+        }
+        if (actionLabel != null) {
+            Spacer(Modifier.width(8.dp))
+            if (healthy) {
+                OutlinedButton(onClick = onAction) { Text(actionLabel) }
+            } else {
+                Button(
+                    onClick = onAction,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) { Text(actionLabel) }
             }
         }
     }
 }
 
 @Composable
-private fun ServiceStatusRow(
-    label: String,
-    enabled: Boolean,
-    primaryActionLabel: String?,
-    onPrimaryAction: (() -> Unit)?,
-    secondaryActionLabel: String? = null,
-    onSecondaryAction: (() -> Unit)? = null
-) {
-    Column {
-        Text(label, fontWeight = FontWeight.SemiBold)
-        Text(
-            text = if (enabled) "ON" else "OFF",
-            color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.labelLarge
-        )
-        Spacer(Modifier.size(4.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (primaryActionLabel != null && onPrimaryAction != null) {
-                Button(onClick = onPrimaryAction) { Text(primaryActionLabel) }
-            }
-            if (secondaryActionLabel != null && onSecondaryAction != null) {
-                Button(onClick = onSecondaryAction) { Text(secondaryActionLabel) }
-            }
-        }
-    }
+private fun StatusDot(healthy: Boolean, size: androidx.compose.ui.unit.Dp) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(if (healthy) SuccessGreen else DangerRed)
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BlockTargetsCard(state: DashboardState) {
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("What’s Blocked", style = MaterialTheme.typography.titleMedium)
-            Text("Apps", fontWeight = FontWeight.SemiBold)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.blockedApps.forEach {
-                    TargetChip(it)
-                }
-            }
-            Text("Domains", fontWeight = FontWeight.SemiBold)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.blockedDomains.forEach {
-                    TargetChip(it)
-                }
-            }
+    SectionCard(title = "What's blocked") {
+        Text(
+            "Apps",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            state.blockedApps.forEach { TargetChip(it) }
+        }
+        Text(
+            "Websites",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            state.blockedDomains.forEach { TargetChip(it) }
         }
     }
 }
@@ -769,10 +730,8 @@ private fun TargetChip(text: String) {
     Text(
         text = text,
         modifier = Modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.small
-            )
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         style = MaterialTheme.typography.bodySmall
     )
@@ -780,19 +739,63 @@ private fun TargetChip(text: String) {
 
 @Composable
 private fun UsageCard(state: DashboardState) {
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Usage Today", style = MaterialTheme.typography.titleMedium)
-            if (state.perAppUsage.isEmpty()) {
-                Text("No blocked apps opened yet. Keep going!", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                state.perAppUsage.entries.sortedByDescending { it.value }.forEach { (pkg, seconds) ->
-                    Column {
-                        Text(friendlySourceLabel(pkg), fontWeight = FontWeight.SemiBold)
-                        Text(formatDuration(seconds), style = MaterialTheme.typography.bodySmall)
+    SectionCard(title = "Usage today") {
+        if (state.perAppUsage.isEmpty()) {
+            Text(
+                "No blocked apps opened yet. Keep going!",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            val maxUsage = state.perAppUsage.values.max().coerceAtLeast(1)
+            state.perAppUsage.entries.sortedByDescending { it.value }.forEach { (pkg, seconds) ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth()) {
+                        Text(
+                            friendlySourceLabel(pkg),
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            formatDuration(seconds),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+                    LinearProgressIndicator(
+                        progress = { seconds.toFloat() / maxUsage.toFloat() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = MaterialTheme.colorScheme.secondary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        drawStopIndicator = {}
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SectionCard(title: String, content: @Composable () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            content()
         }
     }
 }
@@ -805,30 +808,13 @@ private fun friendlySourceLabel(id: String): String {
     }
 }
 
-private enum class StatusTone { SUCCESS, WARNING, DANGER }
-
-@Composable
-private fun ColoredCard(tone: StatusTone, content: @Composable ColumnScope.() -> Unit) {
-    val colors = when (tone) {
-        StatusTone.SUCCESS -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        StatusTone.WARNING -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        StatusTone.DANGER -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-    }
-    Card(colors = CardDefaults.cardColors(containerColor = colors.first)) {
-        CompositionLocalProvider(LocalContentColor provides colors.second) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                content = content
-            )
-        }
-    }
-}
-
 private fun formatDuration(seconds: Long): String {
     val hrs = seconds / 3600
     val mins = (seconds % 3600) / 60
     val secs = seconds % 60
-    return "%02dh %02dm %02ds".format(hrs, mins, secs)
+    return when {
+        hrs > 0 -> "%dh %02dm".format(hrs, mins)
+        mins > 0 -> "%dm %02ds".format(mins, secs)
+        else -> "%ds".format(secs)
+    }
 }
