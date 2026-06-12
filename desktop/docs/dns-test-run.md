@@ -55,8 +55,8 @@ sudo nft -f /etc/focusforlife/ffl-dns.nft
 These should fail for blocked domains:
 
 ```bash
-dig @127.0.0.1 -p 5335 site-a.example.com
-dig @127.0.0.1 -p 5335 site-b.example.com
+dig @127.0.0.1 -p 5335 twitch.tv
+dig @127.0.0.1 -p 5335 discord.com
 ```
 
 Then check browser access to a blocked site.

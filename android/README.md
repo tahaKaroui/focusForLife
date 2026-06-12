@@ -61,7 +61,7 @@ It has three lists:
 | `browserPackages`     | Browsers whose history/usage is watched | package names |
 
 The shipped defaults are common time-sinks (YouTube, Instagram, TikTok, Snapchat,
-Twitter/X, Netflix). **Add your own** (site-a.example.com, Reddit, games, whatever) and
+Twitter/X, Netflix). **Add your own** (Twitch, Reddit, games, whatever) and
 **remove any you don't care about**, then rebuild.
 
 ### Blocking a website
@@ -71,14 +71,14 @@ Easy — websites are just domains. Add the bare domain to `blockedDomains`:
 ```kotlin
 val blockedDomains: List<String> = listOf(
     // ...existing entries...
-    "site-a.example.com",
-    "site-b.example.com",
+    "twitch.tv",
+    "discord.com",
     "reddit.com",
 )
 ```
 
-You don't need every subdomain — matching covers `site-a.example.com` **and** anything ending
-in `.site-a.example.com`.
+You don't need every subdomain — matching covers `twitch.tv` **and** anything ending
+in `.twitch.tv`.
 
 ### Blocking an app — finding its package name
 

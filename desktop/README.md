@@ -50,13 +50,13 @@ list is example defaults — **edit it to match the sites you want blocked**:
 # config/blocked-domains.txt
 youtube.com
 instagram.com
-site-a.example.com
-site-b.example.com
+twitch.tv
+discord.com
 reddit.com
 ```
 
-You don't need every subdomain — `site-a.example.com` also matches anything ending in
-`.site-a.example.com`. Full format notes: `docs/blocklist-format.md`.
+You don't need every subdomain — `twitch.tv` also matches anything ending in
+`.twitch.tv`. Full format notes: `docs/blocklist-format.md`.
 
 ---
 
