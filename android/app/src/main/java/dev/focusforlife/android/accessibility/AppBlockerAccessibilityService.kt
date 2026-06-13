@@ -28,7 +28,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     }
 
     private var activePackage: String? = null
-    private var lastBlockMs: Long = 0L
+    private var launchingBlockScreen: Boolean = false
     private var lastActiveTimestamp: Long = 0L
     private var pendingStopDeadline: Long = 0L
     private var pendingStopPackage: String? = null
@@ -313,21 +313,25 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     }
 
     private fun blockNow() {
-        // Debounce: events keep firing during the HOME transition and the block
-        // screen launch. Re-triggering on every one of them used to press HOME
-        // again (hiding the block screen we just opened), causing a black
-        // flashing loop where the message never stayed on screen.
-        val now = System.currentTimeMillis()
-        if (BlockedActivity.isShowing() || now - lastBlockMs < BLOCK_DEBOUNCE_MS) {
-            return
-        }
-        lastBlockMs = now
+        // The block itself is instant; there is NO grace period where a blocked
+        // app stays open. We only guard against the block screen re-launching
+        // itself: pressing HOME + showing BlockedActivity fires more events, and
+        // acting on those used to press HOME again (hiding the screen we just
+        // opened) in a black flashing loop.
+        //
+        // launchingBlockScreen covers the gap between startActivity() and the
+        // activity's onStart() (where isShowing() flips true). Once that gap
+        // passes, isShowing() takes over. Neither adds delay to the first block
+        // or to re-blocking the instant a blocked app returns to the foreground.
+        if (launchingBlockScreen || BlockedActivity.isShowing()) return
+        launchingBlockScreen = true
         performGlobalAction(GLOBAL_ACTION_HOME)
         FocusLogger.i("Block screen shown.")
         val intent = Intent(this, BlockedActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(intent)
+        usageHandler.postDelayed({ launchingBlockScreen = false }, BLOCK_LAUNCH_LATCH_MS)
     }
 
     private fun shouldBlockNow(): Boolean {
@@ -610,7 +614,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         fun isConnected(): Boolean = connected
 
         private const val USAGE_TICK_MS = 1_000L
-        private const val BLOCK_DEBOUNCE_MS = 3_000L
+        private const val BLOCK_LAUNCH_LATCH_MS = 1_200L
         private const val PENDING_STOP_GRACE_MS = 1_800L
         private const val URL_CHECK_INTERVAL_MS = 500L
         private val TRANSIENT_PACKAGES = setOf(
