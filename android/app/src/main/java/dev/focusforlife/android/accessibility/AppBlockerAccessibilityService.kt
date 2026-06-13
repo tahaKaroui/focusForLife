@@ -28,7 +28,6 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     }
 
     private var activePackage: String? = null
-    private var launchingBlockScreen: Boolean = false
     private var lastActiveTimestamp: Long = 0L
     private var pendingStopDeadline: Long = 0L
     private var pendingStopPackage: String? = null
@@ -213,9 +212,11 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         // Defeat the "minimize into a MIUI floating/freeform window" bypass: rootInActiveWindow
         // only sees the focused window, so a blocked app/site shoved into a small window keeps
         // playing. Once over quota, scan ALL visible windows and kick if a blocked target is up.
-        // Skip while the block screen is up: the kicked app often lingers in the window list
-        // during MIUI's transition animation and would re-trigger an immediate second kick.
-        if (!BlockedActivity.isShowing() && shouldBlockNow() && isBlockedTargetVisibleAcrossWindows()) {
+        // Skip only while our block screen is the live foreground: the kicked app lingers
+        // in the window list during MIUI's transition animation and would re-trigger an
+        // immediate second kick. Keyed on the real foreground (not a flag) so a blocked
+        // target that comes back is always caught.
+        if (!isOwnBlockScreenForeground() && shouldBlockNow() && isBlockedTargetVisibleAcrossWindows()) {
             finalizeActiveUsage()
             finalizeBrowserUsage()
             FocusLogger.i("Blocking via cross-window scan (floating/minimized target)")
@@ -313,25 +314,26 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     }
 
     private fun blockNow() {
-        // The block itself is instant; there is NO grace period where a blocked
-        // app stays open. We only guard against the block screen re-launching
-        // itself: pressing HOME + showing BlockedActivity fires more events, and
-        // acting on those used to press HOME again (hiding the screen we just
-        // opened) in a black flashing loop.
-        //
-        // launchingBlockScreen covers the gap between startActivity() and the
-        // activity's onStart() (where isShowing() flips true). Once that gap
-        // passes, isShowing() takes over. Neither adds delay to the first block
-        // or to re-blocking the instant a blocked app returns to the foreground.
-        if (launchingBlockScreen || BlockedActivity.isShowing()) return
-        launchingBlockScreen = true
+        // Block instantly, every time, with NO time-based grace period (a timer
+        // can always be raced by rapidly reopening the app during the window).
+        // The only thing we must avoid is re-pressing HOME while our own block
+        // screen is the live foreground, which would hide it and start a flash
+        // loop. We decide that from the ACTUAL current foreground, not a flag or
+        // timer, so a blocked app that claws its way back is re-kicked at once.
+        if (isOwnBlockScreenForeground()) return
         performGlobalAction(GLOBAL_ACTION_HOME)
         FocusLogger.i("Block screen shown.")
         val intent = Intent(this, BlockedActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)
-        usageHandler.postDelayed({ launchingBlockScreen = false }, BLOCK_LAUNCH_LATCH_MS)
+    }
+
+    /** True only while our full-screen block screen is the live foreground window. */
+    private fun isOwnBlockScreenForeground(): Boolean {
+        if (!BlockedActivity.isShowing()) return false
+        val rootPkg = rootInActiveWindow?.packageName?.toString()
+        return rootPkg == applicationContext.packageName
     }
 
     private fun shouldBlockNow(): Boolean {
@@ -613,8 +615,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         @Volatile private var connected = false
         fun isConnected(): Boolean = connected
 
-        private const val USAGE_TICK_MS = 1_000L
-        private const val BLOCK_LAUNCH_LATCH_MS = 1_200L
+        private const val USAGE_TICK_MS = 400L
         private const val PENDING_STOP_GRACE_MS = 1_800L
         private const val URL_CHECK_INTERVAL_MS = 500L
         private val TRANSIENT_PACKAGES = setOf(
