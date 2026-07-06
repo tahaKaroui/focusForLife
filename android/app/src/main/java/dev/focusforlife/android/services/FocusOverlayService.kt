@@ -1,5 +1,8 @@
 package dev.focusforlife.android.services
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -7,14 +10,19 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.TextView
 import dev.focusforlife.android.R
 import dev.focusforlife.android.core.FocusRules
 import dev.focusforlife.android.logging.FocusLogger
+import dev.focusforlife.android.ui.BlockedActivity
 import kotlin.math.abs
 
 /**
@@ -32,7 +40,12 @@ class FocusOverlayService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var accessibilityCheckTick = 0
     private var unhealthyChecks = 0
-    private var lastBlockedState: Boolean? = null
+    private var lastBubbleState = -1
+    private var vibrator: Vibrator? = null
+    private var urgentActive = false
+    private var takedownFired = false
+    private var pulseAnimator: AnimatorSet? = null
+    private var pulseTarget: android.view.View? = null
     private val updateRunnable = object : Runnable {
         override fun run() {
             updateOverlay()
@@ -45,6 +58,12 @@ class FocusOverlayService : Service() {
         super.onCreate()
         FocusLogger.init(this)
         FocusForegroundNotifications.ensureChannel(this)
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -120,6 +139,8 @@ class FocusOverlayService : Service() {
     }
 
     private fun removeOverlay() {
+        stopPulse()
+        urgentActive = false
         overlayView?.let {
             windowManager?.removeView(it)
         }
@@ -162,12 +183,24 @@ class FocusOverlayService : Service() {
         bubbleTime.text = format(hourlyLeft)
         bubbleLabel.text = format(dailyLeft)
 
-        if (blocked != lastBlockedState) {
-            lastBlockedState = blocked
-            val bg = if (blocked) R.drawable.overlay_bubble_bg_blocked else R.drawable.overlay_bubble_bg
+        val urgent = !blocked && hourlyLeft in 1..URGENT_THRESHOLD_SECONDS
+        val bubbleState = when {
+            blocked -> STATE_BLOCKED
+            urgent -> STATE_URGENT
+            else -> STATE_NORMAL
+        }
+        if (bubbleState != lastBubbleState) {
+            lastBubbleState = bubbleState
+            val bg = when (bubbleState) {
+                STATE_BLOCKED -> R.drawable.overlay_bubble_bg_blocked
+                STATE_URGENT -> R.drawable.overlay_bubble_bg_urgent
+                else -> R.drawable.overlay_bubble_bg
+            }
             view.findViewById<android.view.View>(R.id.overlayBubble).setBackgroundResource(bg)
             view.findViewById<android.view.View>(R.id.overlayMinimized).setBackgroundResource(bg)
         }
+        handleUrgency(view, urgent, hourlyLeft)
+        maybeTriggerTakedown(hourlyLeft, blocked)
 
         view.findViewById<TextView>(R.id.overlayTitle).text =
             if (blocked) "BLOCKED" else "TIME LEFT"
@@ -189,6 +222,110 @@ class FocusOverlayService : Service() {
         val mins = seconds / 60
         val secs = seconds % 60
         return "%02d:%02d".format(mins, secs)
+    }
+
+    /**
+     * Final-countdown drama. During the last [URGENT_THRESHOLD_SECONDS] the bubble
+     * pulses, shakes and buzzes with rising intensity so the ending is impossible to
+     * miss — and if the user has dwarfed it into the minimized dot, we pop it back
+     * open so the shrinking clock is right in their face.
+     */
+    private fun handleUrgency(view: android.view.View, urgent: Boolean, hourlyLeft: Long) {
+        if (urgent) {
+            if (!urgentActive) {
+                urgentActive = true
+                if (isMinimized) setMinimized(view, false)
+                startPulse(urgentTarget(view))
+            }
+            buzz(hourlyLeft)
+        } else if (urgentActive) {
+            urgentActive = false
+            stopPulse()
+        }
+    }
+
+    /** Pulse whatever the user is currently looking at: the open card, else the bubble. */
+    private fun urgentTarget(view: android.view.View): android.view.View {
+        val expanded = view.findViewById<android.view.View>(R.id.overlayExpanded)
+        return if (expanded.visibility == android.view.View.VISIBLE) {
+            expanded
+        } else {
+            view.findViewById(R.id.overlayBubble)
+        }
+    }
+
+    private fun startPulse(target: android.view.View) {
+        if (pulseAnimator != null && pulseTarget === target) return
+        stopPulse()
+        pulseTarget = target
+        val scaleX = ObjectAnimator.ofFloat(target, "scaleX", 1f, 1.24f)
+        val scaleY = ObjectAnimator.ofFloat(target, "scaleY", 1f, 1.24f)
+        val shake = ObjectAnimator.ofFloat(target, "translationX", -7f, 7f)
+        listOf(scaleX, scaleY).forEach {
+            it.duration = 440L
+            it.repeatCount = ValueAnimator.INFINITE
+            it.repeatMode = ValueAnimator.REVERSE
+            it.interpolator = AccelerateDecelerateInterpolator()
+        }
+        shake.duration = 80L
+        shake.repeatCount = ValueAnimator.INFINITE
+        shake.repeatMode = ValueAnimator.REVERSE
+        pulseAnimator = AnimatorSet().apply {
+            playTogether(scaleX, scaleY, shake)
+            start()
+        }
+    }
+
+    private fun stopPulse() {
+        pulseAnimator?.cancel()
+        pulseAnimator = null
+        pulseTarget?.apply {
+            scaleX = 1f
+            scaleY = 1f
+            translationX = 0f
+        }
+        pulseTarget = null
+    }
+
+    /** One haptic pop per remaining second, harder as zero approaches. */
+    private fun buzz(hourlyLeft: Long) {
+        val v = vibrator ?: return
+        if (!v.hasVibrator()) return
+        val closeness = (URGENT_THRESHOLD_SECONDS - hourlyLeft).coerceIn(0, URGENT_THRESHOLD_SECONDS)
+        val durationMs = 40L + closeness * 12L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val amplitude = (70 + closeness * 18).coerceIn(1, 255).toInt()
+            v.vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(durationMs)
+        }
+    }
+
+    /**
+     * The moment the session clock hits zero we take the foreground app down
+     * ourselves. The accessibility service only re-blocks on the next app switch,
+     * so without this a user idling inside a blocked app at 0 would linger; here the
+     * block screen slams up the instant the count expires. Fires once per depletion.
+     */
+    private fun maybeTriggerTakedown(hourlyLeft: Long, blocked: Boolean) {
+        if (hourlyLeft <= 0L && blocked) {
+            if (!takedownFired) {
+                takedownFired = true
+                FocusLogger.i("Session hit 0; overlay slamming up block screen")
+                startActivity(
+                    Intent(this, BlockedActivity::class.java).apply {
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        )
+                    }
+                )
+            }
+        } else {
+            takedownFired = false
+        }
     }
 
     private fun toggleExpanded() {
@@ -272,6 +409,10 @@ class FocusOverlayService : Service() {
     companion object {
         const val ACTION_STOP = "dev.focusforlife.android.action.STOP_OVERLAY"
         private const val ACCESSIBILITY_CHECK_INTERVAL_TICKS = 15
+        private const val URGENT_THRESHOLD_SECONDS = 10L
+        private const val STATE_NORMAL = 0
+        private const val STATE_URGENT = 1
+        private const val STATE_BLOCKED = 2
         @Volatile private var running: Boolean = false
         fun isRunning(): Boolean = running
     }
