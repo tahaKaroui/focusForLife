@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="logo.png" alt="FocusForLife" width="480">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/logo-dark.svg">
+    <img src="docs/media/logo-light.svg" alt="FocusForLife" width="360">
+  </picture>
 </p>
 
 # FocusForLife
