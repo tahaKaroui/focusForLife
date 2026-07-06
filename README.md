@@ -13,28 +13,29 @@ daily quota is gone, it's gone **everywhere**.
 
 This is a **build-from-source** project. The blocklists are compiled into the
 binaries, so unblocking something in a weak moment requires editing a file and
-rebuilding — not flipping a toggle. The friction is the point.
+rebuilding, not flipping a toggle. The friction is the point.
 
-> **New here? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — one
+> **New here? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**: one
 > walkthrough from a fresh clone to a working blocker on desktop and/or phone, with
 > optional cross-device sync at the end.
 
 ## See it in action
 
-Open a blocked app and you're kicked out instantly — no grace period, no "just 5
-more minutes." Reopen it ten times and it blocks all ten.
+The floating bubble counts down your remaining time. In the last 10 seconds it
+turns red, pulses, and buzzes; at zero the app is taken down on the spot. Reopen
+it and you're kicked out instantly. No grace period, no "just 5 more minutes."
 
 <p align="center">
-  <img src="docs/media/phone-block.png" alt="Opening a blocked app instantly shows the block screen" width="280">
+  <img src="docs/media/phone-block.gif" alt="Bubble counts down, pulses red for the last 10 seconds, then the app is blocked; reopening is blocked instantly" width="280">
 </p>
 
 The desktop companion enforces the same shared budget and shows your status at a
-glance — green while you have time, red during a hard-block window:
+glance: green while you have time, red during a hard-block window.
 
 <p align="center">
-  <img src="docs/media/desktop-safe.png" alt="Desktop UI — within safe window" width="300">
+  <img src="docs/media/desktop-safe.png" alt="Desktop UI (within safe window)" width="300">
   &nbsp;&nbsp;
-  <img src="docs/media/desktop-hibernate.png" alt="Desktop UI — hibernate window" width="300">
+  <img src="docs/media/desktop-hibernate.png" alt="Desktop UI (hibernate window)" width="300">
 </p>
 
 ## What's in here
@@ -54,18 +55,18 @@ customizing what gets blocked:
 
 All platforms enforce the same rules against the same clock:
 
-- **Daily quota** — a fixed budget of minutes per day across all blocked targets.
-- **Hourly bucket** — a per-clock-hour limit; exhaust it and you're in cooldown
+- **Daily quota**: a fixed budget of minutes per day across all blocked targets.
+- **Hourly bucket**: a per-clock-hour limit; exhaust it and you're in cooldown
   until the next hour.
-- **Hard-block window** — a time range (e.g. 23:00–11:00) where everything on
+- **Hard-block window**: a time range (e.g. 23:00 to 11:00) where everything on
   the list is blocked outright.
-- **Free-time windows** — scheduled exceptions (evening, afternoon break).
+- **Free-time windows**: scheduled exceptions (evening, afternoon break).
 
 ## Cross-device sync (optional)
 
 Devices can share one usage budget through a Firebase Realtime Database you
 host yourself, with locked-down rules ([`database.rules.json`](database.rules.json)).
-Sync is **off by default** — with no credentials configured, every device runs
+Sync is **off by default**: with no credentials configured, every device runs
 standalone. Setup walkthrough: [`docs/firebase-setup.md`](docs/firebase-setup.md).
 
 ## Philosophy
@@ -79,4 +80,4 @@ standalone. Setup walkthrough: [`docs/firebase-setup.md`](docs/firebase-setup.md
 
 ## License
 
-[MIT](LICENSE) — see [CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to help.
+[MIT](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to help.
